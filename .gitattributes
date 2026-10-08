@@ -1,0 +1,3 @@
+# Upstream reference code must stay byte-identical: no line-ending conversion.
+legacy/** -text
+tests/data/** -text

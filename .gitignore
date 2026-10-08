@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.spyproject/
+.vscode/
+*.egg-info/
+
+# Raw recordings and generated output trees stay out of the repo.
+/data/
+/outputs/

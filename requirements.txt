@@ -1,0 +1,11 @@
+# Target: Python 3.11, conda env "larval". Install with pip, not conda-forge
+# packages (see docs/DECISIONS.md D-012).
+numpy
+pandas>=2.2,<3
+scipy
+matplotlib
+seaborn
+scikit-learn
+hmmlearn
+PyQt5
+pytest
