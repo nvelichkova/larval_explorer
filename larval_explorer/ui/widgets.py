@@ -190,6 +190,13 @@ class FigurePanel(QWidget):
         self.selector.addItems(list(self._builders))
         if previous in self._builders:
             self.selector.setCurrentText(previous)
+        elif previous:
+            # Per-track figures are named "<figure>__<track>". Another recording has other
+            # tracks, so keep the kind of figure and show it for the first track there is.
+            kind = previous.split("__", 1)[0]
+            same_kind = [name for name in self._builders if name.split("__", 1)[0] == kind]
+            if same_kind:
+                self.selector.setCurrentText(same_kind[0])
         self.selector.blockSignals(False)
         self.selector.setEnabled(bool(self._builders))
         if self._builders:
@@ -250,8 +257,14 @@ class DataFrameModel(QAbstractTableModel):
     def columnCount(self, parent: QModelIndex = QModelIndex()) -> int:
         return 0 if parent.isValid() else len(self._table.columns)
 
+    # Qt calls these from C++, sometimes for a row or column the table no longer
+    # has (a header repainting after the model was swapped). An exception raised
+    # here ends the program, so anything out of range answers "nothing".
+
     def data(self, index: QModelIndex, role: int = Qt.DisplayRole):
         if not index.isValid() or role != Qt.DisplayRole:
+            return None
+        if not (0 <= index.row() < len(self._table) and 0 <= index.column() < len(self._table.columns)):
             return None
         value = self._table.iat[index.row(), index.column()]
         if isinstance(value, float):
@@ -261,7 +274,9 @@ class DataFrameModel(QAbstractTableModel):
     def headerData(self, section: int, orientation: Qt.Orientation, role: int = Qt.DisplayRole):
         if role != Qt.DisplayRole:
             return None
-        return str(self._table.columns[section]) if orientation == Qt.Horizontal else str(section)
+        if orientation == Qt.Horizontal:
+            return str(self._table.columns[section]) if 0 <= section < len(self._table.columns) else None
+        return str(section)
 
 
 class TablePreview(QWidget):
@@ -279,8 +294,11 @@ class TablePreview(QWidget):
         self.set_table(None)
 
     def set_table(self, table: pd.DataFrame | None, name: str = "") -> None:
-        self._model = DataFrameModel(table)
-        self.view.setModel(self._model)
+        # Give the view its new model before letting go of the old one: dropping the
+        # old model first frees it while the view still points at it, and Qt crashes.
+        model = DataFrameModel(table)
+        self.view.setModel(model)
+        self._model = model
         if table is None:
             self.caption.setText("No table yet.")
         else:

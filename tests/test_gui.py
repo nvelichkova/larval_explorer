@@ -246,6 +246,56 @@ def test_a_failing_stage_is_reported_and_the_window_recovers(app, window):
     assert window.statuses["01"] == PL.STATUS_OK
 
 
+def test_switching_recording_from_any_tab_keeps_the_tab_and_the_kind_of_figure(app, window, tmp_path):
+    second = write_synthetic_recording(tmp_path / "amiGA_n1_att1.csv", seed=9)
+    window.project_tab.add_paths([second])
+    selector = window.recording_selector
+    assert [selector.itemData(i) for i in range(selector.count())] == ["w1118_n1_att1", "amiGA_n1_att1"]
+    assert selector.itemText(0).startswith("○") and selector.currentIndex() == 0
+
+    set_min_segment(window, 20.0)
+    window.run_targets(["05"])
+    idle(app, window)
+    assert selector.itemText(0).startswith("◐")                      # some stages done
+    window.run_targets(None)
+    idle(app, window)
+    assert selector.itemText(0).startswith("✓") and selector.itemText(1).startswith("○")
+
+    tab = window.stage_tabs["05"]
+    window.tabs.setCurrentWidget(tab)
+    idle(app, window)
+    tab.figures.selector.setCurrentText("rdp__w1118_n1_att1__larva1__seg1")
+    assert tab.figures.selector.currentText() == "rdp__w1118_n1_att1__larva1__seg1"
+
+    window.next_button.click()                                        # second recording: not run yet
+    idle(app, window)
+    assert window.pipeline.recording_id == "amiGA_n1_att1" and selector.currentIndex() == 1
+    assert window.tabs.currentWidget() is tab                         # still on the RDP tab
+    assert tab.figures.selector.count() == 0 and "not run" in tab.status_label.text()
+
+    window.params = window.params.__class__(stage_02=window.stage_tabs["03"].host.params.stage_02.__class__(min_segment_seconds=20.0))
+    window.run_targets(None)
+    idle(app, window)
+    tab.figures.selector.setCurrentText("rdp__amiGA_n1_att1__larva0__seg0")
+
+    window.step_recording(+1)                                         # wraps round to the first
+    idle(app, window)
+    assert window.pipeline.recording_id == "w1118_n1_att1"
+    assert window.tabs.currentWidget() is tab
+    assert tab.figures.selector.currentText().startswith("rdp__w1118_n1_att1__")   # same kind, this recording's track
+    assert "genotype" not in window.recording_label.text()            # no metadata yet: the name is shown
+
+    selector.setCurrentIndex(1)
+    selector.activated.emit(1)                                        # choosing from the drop-down
+    idle(app, window)
+    assert window.pipeline.recording_id == "amiGA_n1_att1"
+    assert tab.figures.selector.currentText().startswith("rdp__amiGA_n1_att1__")
+    window.step_recording(-1)
+    idle(app, window)
+    assert window.pipeline.recording_id == "w1118_n1_att1"
+    assert not window.problems, window.problems
+
+
 def test_removing_every_recording_leaves_an_empty_project_not_a_crash(app, window, monkeypatch):
     from PyQt5.QtWidgets import QMessageBox
 

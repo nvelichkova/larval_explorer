@@ -17,10 +17,12 @@ import pandas as pd
 
 from larval_explorer.core import registry as R
 from larval_explorer.core.params import PipelineParams
-from larval_explorer.core.pipeline import RecordingPipeline
+from larval_explorer.core.manifest import STATUS_FAILED, load_manifest
+from larval_explorer.core.pipeline import STAGE_KEYS, RecordingPipeline
 
 PROJECT_FILE = "project.json"
 DEFAULT_OUTPUT_FOLDER = "outputs"
+STATE_COMPLETE, STATE_PARTIAL, STATE_FAILED, STATE_NOT_RUN = "complete", "partial", "failed", "not run"
 EXAMPLE_FILENAME_PATTERN = r"(?P<genotype>.+?)_n(?P<n>\d+)_att(?P<attempt>\d+)"
 
 
@@ -68,6 +70,24 @@ class Project:
 
     def recording_ids(self) -> list[str]:
         return self.registry[R.RECORDING_ID].tolist()
+
+    def recording_state(self, recording_id: str) -> str:
+        """How far a recording has got, read from its manifest alone.
+
+        ``complete`` (every stage has a result), ``failed`` (a stage failed),
+        ``partial`` or ``not run``. Cheap enough to show for every recording;
+        it does not tell whether a result is stale, which needs the raw file.
+        """
+        try:
+            manifest = load_manifest(Path(self.output_root) / recording_id)
+        except (ValueError, OSError):
+            return STATE_NOT_RUN
+        if manifest is None or not manifest["stages"]:
+            return STATE_NOT_RUN
+        statuses = [record["status"] for record in manifest["stages"].values()]
+        if STATUS_FAILED in statuses:
+            return STATE_FAILED
+        return STATE_COMPLETE if len(statuses) == len(STAGE_KEYS) else STATE_PARTIAL
 
     def pipeline(self, recording_id: str, params: PipelineParams | None = None) -> RecordingPipeline:
         """The pipeline of one recording.

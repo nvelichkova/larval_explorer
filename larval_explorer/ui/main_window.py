@@ -7,7 +7,10 @@ from pathlib import Path
 from typing import Callable
 
 from PyQt5.QtCore import QObject, Qt, QThreadPool, pyqtSlot
+from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import (
+    QComboBox,
+    QShortcut,
     QFileDialog,
     QHBoxLayout,
     QLabel,
@@ -26,7 +29,14 @@ from larval_explorer import __version__
 from larval_explorer.core import pipeline as PL
 from larval_explorer.core import registry as R
 from larval_explorer.core.params import PipelineParams
-from larval_explorer.core.project import Project, ProjectError
+from larval_explorer.core.project import (
+    STATE_COMPLETE,
+    STATE_FAILED,
+    STATE_NOT_RUN,
+    STATE_PARTIAL,
+    Project,
+    ProjectError,
+)
 from larval_explorer.plots import catalog
 from larval_explorer.ui.aggregate_tab import AggregateTab
 from larval_explorer.ui.batch_tab import BatchTab
@@ -35,6 +45,7 @@ from larval_explorer.workers.tasks import FunctionWorker, PipelineWorker
 
 STATUS_SYMBOL = {PL.STATUS_OK: "✓", PL.STATUS_STALE: "⚠", PL.STATUS_MISSING: "○", PL.STATUS_FAILED: "✗"}
 RUNNING_SYMBOL = "…"
+RECORDING_SYMBOL = {STATE_COMPLETE: "✓", STATE_PARTIAL: "◐", STATE_FAILED: "✗", STATE_NOT_RUN: "○"}
 
 STAGE_TABS = (
     ("03", "Smooth 03", "Savitzky-Golay smoothing of the centre of mass, per track. "
@@ -96,6 +107,23 @@ class MainWindow(QMainWindow):
         # Left: active recording, stage states, run controls.
         self.recording_label = QLabel("No recording selected.")
         self.recording_label.setWordWrap(True)
+        # Switch recording from any tab: the tab stays where it is and redraws.
+        self.recording_selector = QComboBox()
+        self.recording_selector.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        self.recording_selector.setToolTip(
+            "✓ every stage has a result   ◐ some stages   ✗ a stage failed   ○ not run" + chr(10)
+            + "Ctrl+Down / Ctrl+Up: next / previous recording"
+        )
+        self.recording_selector.activated.connect(self._recording_chosen)
+        self.previous_button, self.next_button = QPushButton("◀"), QPushButton("▶")
+        self.previous_button.setToolTip("Previous recording (Ctrl+Up)")
+        self.next_button.setToolTip("Next recording (Ctrl+Down)")
+        for button in (self.previous_button, self.next_button):
+            button.setFixedWidth(34)
+        self.previous_button.clicked.connect(lambda: self.step_recording(-1))
+        self.next_button.clicked.connect(lambda: self.step_recording(+1))
+        QShortcut(QKeySequence("Ctrl+Up"), self, activated=lambda: self.step_recording(-1))
+        QShortcut(QKeySequence("Ctrl+Down"), self, activated=lambda: self.step_recording(+1))
         self.stage_list = QListWidget()
         self.stage_list.itemClicked.connect(self._stage_clicked)
         self.run_all_button, self.cancel_button = QPushButton("Run all stages"), QPushButton("Cancel")
@@ -106,6 +134,11 @@ class MainWindow(QMainWindow):
         left = QWidget()
         left_layout = QVBoxLayout(left)
         left_layout.addWidget(QLabel("Active recording"))
+        selector_row = QHBoxLayout()
+        selector_row.addWidget(self.recording_selector, 1)
+        selector_row.addWidget(self.previous_button)
+        selector_row.addWidget(self.next_button)
+        left_layout.addLayout(selector_row)
         left_layout.addWidget(self.recording_label)
         left_layout.addWidget(QLabel("Stages   ✓ current   ⚠ stale   ○ not run   ✗ failed"))
         left_layout.addWidget(self.stage_list, 1)
@@ -189,17 +222,59 @@ class MainWindow(QMainWindow):
     def _registry_changed(self) -> None:
         """The registry or output folder was edited: drop the recording if it no longer applies."""
         if self.pipeline is None:
+            self._refresh_recording_selector()
             return
         still_there = self.pipeline.recording_id in self.project.recording_ids()
         if still_there and self.pipeline.folder.parent == Path(self.project.output_root):
             self.pipeline.metadata = R.metadata_for(self.project.registry, self.pipeline.recording_id)
             self.pipeline.manifest["metadata"] = self.pipeline.metadata
+            self.recording_label.setText(self._recording_caption())
+            self._refresh_recording_selector()
         else:
             recording_id = self.pipeline.recording_id if still_there else None
             self.pipeline = None
             if recording_id is not None:
                 self.set_active_recording(recording_id)
             self.refresh()
+
+    def _recording_caption(self) -> str:
+        if self.pipeline is None:
+            return "No recording selected."
+        metadata = ", ".join(f"{key}: {value}" for key, value in self.pipeline.metadata.items() if str(value).strip())
+        return metadata or self.pipeline.recording_id
+
+    def _refresh_recording_selector(self) -> None:
+        """List every recording with how far it has got, and mark the active one."""
+        selector = self.recording_selector
+        ids = self.project.recording_ids() if self.project is not None else []
+        selector.blockSignals(True)
+        selector.clear()
+        for recording_id in ids:
+            symbol = RECORDING_SYMBOL[self.project.recording_state(recording_id)]
+            selector.addItem(f"{symbol}  {recording_id}", recording_id)
+        active = self.pipeline.recording_id if self.pipeline is not None else None
+        selector.setCurrentIndex(ids.index(active) if active in ids else -1)
+        selector.blockSignals(False)
+        idle = not self.busy
+        selector.setEnabled(idle and bool(ids))
+        self.previous_button.setEnabled(idle and len(ids) > 1)
+        self.next_button.setEnabled(idle and len(ids) > 1)
+
+    def _recording_chosen(self, index: int) -> None:
+        recording_id = self.recording_selector.itemData(index)
+        if recording_id is not None:
+            self.set_active_recording(recording_id)
+
+    def step_recording(self, step: int) -> None:
+        """Make the next (+1) or previous (-1) recording active, wrapping round."""
+        if self.busy or self.project is None:
+            return
+        ids = self.project.recording_ids()
+        if not ids:
+            return
+        active = self.pipeline.recording_id if self.pipeline is not None else None
+        position = ids.index(active) + step if active in ids else (0 if step > 0 else len(ids) - 1)
+        self.set_active_recording(ids[position % len(ids)])
 
     def set_active_recording(self, recording_id: str) -> None:
         if self.busy or self.project is None:
@@ -236,7 +311,8 @@ class MainWindow(QMainWindow):
                 self.progress_label.setText(str(error))
         elif self.pipeline is None:
             self.statuses = {key: PL.STATUS_MISSING for key in PL.STAGE_KEYS}
-        self.recording_label.setText(self.pipeline.recording_id if self.pipeline else "No recording selected.")
+        self.recording_label.setText(self._recording_caption())
+        self._refresh_recording_selector()
         self.run_all_button.setEnabled(self.pipeline is not None and not self.busy)
         self.cancel_button.setEnabled(self.busy and self._worker is not None)
         self._refresh_stage_list()
