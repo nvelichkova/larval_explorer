@@ -155,3 +155,24 @@ def test_stage_11_with_no_events_is_empty_with_a_warning_not_an_error():
     result = stages.stage_11(pd.DataFrame(), segments, P.SteeringParams())
     assert result.tables["segment_fits"].empty and result.tables["run_fits"].empty
     assert "No crawls or head casts" in result.warnings[0]
+
+
+def test_threshold_fit_warnings_stay_silent_when_recordings_run_in_threads():
+    """A per-call warnings.catch_warnings() leaks under threads; the module filter must not."""
+    import subprocess
+    import sys
+
+    from tests.conftest import BASELINE_DIR, REPO_ROOT
+
+    code = f"""
+import threading, pandas as pd
+from larval_explorer.core import schema as S, stages, params as P
+table = S.TRAJECTORY.to_canonical(pd.read_csv(r"{BASELINE_DIR / '03_trajectory_timeseries.csv.gz'}"))
+table = table[table[S.TRACK_ID].isin(table[S.TRACK_ID].unique()[:2])]
+threads = [threading.Thread(target=stages.stage_09, args=(table, P.EventParams())) for _ in range(3)]
+[t.start() for t in threads]; [t.join() for t in threads]
+print("done")
+"""
+    result = subprocess.run([sys.executable, "-W", "default", "-c", code], cwd=REPO_ROOT, capture_output=True, text=True)
+    assert "done" in result.stdout, result.stderr
+    assert "RankWarning" not in result.stderr

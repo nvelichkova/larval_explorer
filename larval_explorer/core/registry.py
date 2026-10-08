@@ -179,10 +179,10 @@ def unlabelled(registry: pd.DataFrame, columns: Iterable[str] | None = None) -> 
     own without anyone noticing, so the UI shows these before a run.
     """
     columns = list(columns) if columns is not None else metadata_columns(registry)
-    if not columns:
+    if not columns or registry.empty:
         return registry.iloc[:0]
     blank = registry[columns].astype("string").fillna("").apply(lambda column: column.str.strip() == "")
-    return registry[blank.any(axis=1)]
+    return registry[blank.to_numpy(dtype=bool).any(axis=1)]
 
 
 def existing_values(registry: pd.DataFrame, column: str) -> list[str]:

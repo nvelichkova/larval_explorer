@@ -244,3 +244,26 @@ def test_a_failing_stage_is_reported_and_the_window_recovers(app, window):
     window.run_targets(["01"])
     idle(app, window)
     assert window.statuses["01"] == PL.STATUS_OK
+
+
+def test_removing_every_recording_leaves_an_empty_project_not_a_crash(app, window, monkeypatch):
+    from PyQt5.QtWidgets import QMessageBox
+
+    monkeypatch.setattr(QMessageBox, "question", lambda *args, **kwargs: QMessageBox.Yes)
+    tab = window.project_tab
+    tab.pattern_edit.setText(r"(?P<genotype>.+?)_n(?P<n>\d+)_att(?P<attempt>\d+)")
+    tab.preview_parse()
+    tab.apply_parse()                                  # the registry now has metadata columns
+    tab.table.selectRow(0)
+    tab._remove_selected()
+    idle(app, window)
+    assert not window.problems, window.problems
+    assert tab.table.rowCount() == 0 and len(window.project.registry) == 0
+    assert window.pipeline is None and window.recording_label.text() == "No recording selected."
+    assert not window.run_all_button.isEnabled()
+    for index in range(window.tabs.count()):           # every tab copes with an empty project
+        window.tabs.setCurrentIndex(index)
+        idle(app, window)
+
+    tab.add_paths([window.project.folder.parent / "w1118_n1_att1.csv"])
+    assert tab.table.rowCount() == 1                   # and recordings can be added again

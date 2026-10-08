@@ -111,3 +111,12 @@ def test_a_registry_row_is_always_one_file(tmp_path):
     recording = tmp_path / "a.csv"
     recording.write_text("x", encoding="utf-8")
     assert R.recording_file(recording) == recording
+
+
+def test_an_emptied_registry_with_metadata_columns_has_no_unlabelled_rows():
+    """Removing every recording must leave a usable, empty registry."""
+    registry = R.apply_parse(make_registry(), R.preview_parse(make_registry(), PATTERN)).iloc[:0]
+    assert R.metadata_columns(registry) == ["genotype", "n", "attempt"]
+    assert R.unlabelled(registry).empty
+    assert R.existing_values(registry, "genotype") == []
+    assert R.preview_parse(registry, PATTERN).empty

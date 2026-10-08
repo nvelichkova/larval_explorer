@@ -25,6 +25,12 @@ from larval_explorer.core import schema as S
 from larval_explorer.core.params import EventParams
 from larval_explorer.core.result import StageResult
 
+# Sparse histogram tails make some candidate threshold fits rank deficient; upstream
+# fits them anyway and the result is unchanged. The filter is installed once, for
+# this module only: a per-call warnings.catch_warnings() is not safe when several
+# recordings run in threads, and let the warnings through.
+warnings.filterwarnings("ignore", category=np.exceptions.RankWarning, module=__name__.replace(".", r"\."))
+
 _FIT_PARTS = ("split_bin", "low_slope", "low_intercept", "high_slope", "high_intercept")
 
 
@@ -76,19 +82,16 @@ def two_line_threshold(abs_velocity: np.ndarray, params: EventParams):
     margin = params.threshold_split_margin_bins
     best_e, best_i = np.inf, None
     best_p0, best_p1 = None, None
-    with warnings.catch_warnings():
-        # Sparse histogram tails make some candidate fits rank deficient; upstream fits them anyway.
-        warnings.simplefilter("ignore", np.exceptions.RankWarning)
-        for i in range(margin, len(bc) - margin):
-            x0, y0, w0 = bc[:i], prob[:i], cnt[:i]
-            p0 = np.polyfit(x0, y0, 1, w=w0)
-            e0 = np.sum(w0 * (y0 - np.polyval(p0, x0))**2)
-            x1, y1, w1 = bc[i:], prob[i:], cnt[i:]
-            p1 = np.polyfit(x1, y1, 1, w=w1)
-            e1 = np.sum(w1 * (y1 - np.polyval(p1, x1))**2)
-            if e0 + e1 < best_e:
-                best_e, best_i = e0 + e1, i
-                best_p0, best_p1 = p0, p1
+    for i in range(margin, len(bc) - margin):
+        x0, y0, w0 = bc[:i], prob[:i], cnt[:i]
+        p0 = np.polyfit(x0, y0, 1, w=w0)
+        e0 = np.sum(w0 * (y0 - np.polyval(p0, x0))**2)
+        x1, y1, w1 = bc[i:], prob[i:], cnt[i:]
+        p1 = np.polyfit(x1, y1, 1, w=w1)
+        e1 = np.sum(w1 * (y1 - np.polyval(p1, x1))**2)
+        if e0 + e1 < best_e:
+            best_e, best_i = e0 + e1, i
+            best_p0, best_p1 = p0, p1
     if best_i is None:
         raise ValueError("Could not fit the angular-velocity threshold: no admissible histogram split.")
     m0, b0 = best_p0
