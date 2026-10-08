@@ -184,4 +184,4 @@ The analysis method and the scripts in `legacy/upstream_scripts/` are the work
 of the authors of
 [Hierarchical dynamics of *Drosophila* larval exploratory behavior](https://github.com/yuribilk/Hierarchical-dynamics-of-Drosophila-larvae-exploratory-behavior).
 If you use this application, cite their manuscript. This repository adds the
-application around their method; it is not affiliated with the original authors.
+application around their method.
