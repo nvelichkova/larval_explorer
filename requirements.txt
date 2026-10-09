@@ -8,4 +8,5 @@ seaborn
 scikit-learn
 hmmlearn
 PyQt5
+openpyxl
 pytest

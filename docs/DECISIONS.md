@@ -1127,3 +1127,43 @@ independence when recordings are few; the recording unit is the conservative
 choice. Larva identity relies on the tracker's larva numbering within a
 recording, which FIM-Track may reassign after a long loss.
 
+---
+
+## D-026 — Excel export of the comparison data; new dependency openpyxl
+**Date:** 2026-10-09 · **Status:** Accepted · **Phase:** 5
+
+**Context.** The comparison figures carry no statistics (D-025), and the user
+wants to run their own on the numbers behind them. The figure-set export
+already wrote those numbers as two CSVs, in long form only.
+
+**Decision.** The Aggregate tab gains "Export data to Excel…", and the
+figure-set export also writes the same workbook (`comparison_data.xlsx`).
+`openpyxl` is added to `requirements.txt`; pandas needs it to write `.xlsx`.
+
+The workbook has eight sheets:
+- `about` — the unit, the grouping, the recordings, the HMM pool, any
+  warnings, the definition of each measure, and library versions;
+- `n` — recordings, larvae and track segments per condition;
+- `all_values_long` — one row per unit, measure and state;
+- `state_occupancy`, `dwell_time_s`, `steering_parameters`,
+  `head_cast_rate_per_min`, `crawl_length_mm` — one sheet per figure, one row
+  per unit, with one column per state where the measure has states
+  (`state_0`, `rho_state_0`, ...).
+
+Every data sheet starts with the condition, each grouping column on its own
+(genotype, ...), the recording and the unit, so the nesting is available to
+whatever does the statistics.
+
+**Reasoning.** One row per unit with a column per state is the layout
+spreadsheet statistics expect; the long sheet is the layout R and Python
+expect. Carrying `recording_id` on every row keeps the non-independence of
+units within a recording visible instead of leaving a flat column of numbers.
+The values are exactly those plotted: a test joins the sheet back to the
+figure data and compares them.
+
+**Consequences.** Blank cells mean "no value" (a unit with no fitted HMM
+segment or no stay in a state), not zero; the `about` sheet says so. The
+workbook reflects the unit chosen when it was exported: exporting by track
+segment gives more rows that are less independent. The CSVs remain for
+anything that prefers them.
+

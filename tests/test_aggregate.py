@@ -267,6 +267,47 @@ def test_comparison_set_is_drawn_and_exported_in_one_action(pooled_project, tmp_
     assert set(exported[S.CONDITION]) == {"amiGA", "w1118"} and len(exported) == len(comparison.values)
 
 
+def test_excel_export_holds_the_numbers_behind_every_figure(pooled_project, tmp_path):
+    comparison = A.compare_recordings(pooled_project, RECORDINGS, ["genotype"])
+    path = A.export_excel(tmp_path / "out" / "data.xlsx", comparison)
+    sheets = pd.read_excel(path, sheet_name=None)
+    assert list(sheets) == ["about", "n", "all_values_long", "state_occupancy", "dwell_time_s",
+                            "steering_parameters", "head_cast_rate_per_min", "crawl_length_mm"]
+    id_columns = ["condition", "genotype", "recording_id", "unit_id"]
+
+    long = sheets["all_values_long"]
+    assert list(long.columns) == id_columns + ["measure", "state", "value"]
+    assert len(long) == len(comparison.values)
+    assert (long["condition"] == long["genotype"]).all()               # grouped by genotype alone
+    # Same numbers as the figures are drawn from, whatever the row order.
+    key = ["recording_id", "unit_id", "measure", "state"]
+    merged = long.merge(comparison.values, on=key, suffixes=("_excel", "_figure"))
+    assert len(merged) == len(long) and np.allclose(merged["value_excel"], merged["value_figure"])
+
+    occupancy = sheets["state_occupancy"]
+    assert list(occupancy.columns) == id_columns + ["state_0", "state_1", "state_2"]
+    assert len(occupancy) == 8 and occupancy["unit_id"].is_unique       # one row per larva
+    assert np.allclose(occupancy[["state_0", "state_1", "state_2"]].sum(axis=1), 1.0)
+    assert set(occupancy["genotype"]) == {"amiGA", "w1118"} and occupancy["recording_id"].nunique() == 4
+
+    rate = sheets["head_cast_rate_per_min"]
+    assert list(rate.columns) == id_columns + ["head_cast_rate_per_min"] and len(rate) == 8
+    steering = sheets["steering_parameters"]
+    assert list(steering.columns) == id_columns + [f"{p}_state_{k}" for p in ("rho", "kappa", "mu", "sigma") for k in range(3)]
+    assert steering["unit_id"].is_unique
+    assert sheets["n"].to_dict(orient="records")[0] == {
+        "condition": "amiGA", "n_recordings": 2, "n_larvae": 4, "n_track_segments": 6, "n_units": 4}
+    about = dict(zip(sheets["about"]["item"], sheets["about"]["value"]))
+    assert about["unit (one row per)"] == "larva" and about["grouped by"] == "genotype"
+    assert about["statistics"] == "None computed here." and "measure: state_occupancy" in about
+
+    by_recording = A.compare_recordings(pooled_project, RECORDINGS, ["genotype", "n"], A.UNIT_RECORDING)
+    sheets = pd.read_excel(A.export_excel(tmp_path / "by_recording.xlsx", by_recording), sheet_name=None)
+    crawl = sheets["crawl_length_mm"]
+    assert list(crawl.columns)[:5] == ["condition", "genotype", "n", "recording_id", "unit_id"] and len(crawl) == 4
+    assert crawl.loc[0, "condition"] == "amiGA | 1" and (crawl["unit_id"] == crawl["recording_id"]).all()
+
+
 def test_aggregate_tab_fits_compares_and_exports(tmp_path, monkeypatch):
     import os
 
@@ -319,6 +360,13 @@ def test_aggregate_tab_fits_compares_and_exports(tmp_path, monkeypatch):
     manifest = json.loads((tmp_path / "figure_set" / A.FIGURE_MANIFEST).read_text(encoding="utf-8"))
     assert manifest["unit"] == "recording" and len(manifest["recordings"]) == 3 and manifest["warnings"]
     assert (tmp_path / "figure_set" / "state_occupancy.pdf").is_file()
+    assert (tmp_path / "figure_set" / A.EXCEL_FILE).is_file() and A.EXCEL_FILE in manifest["data_files"]
+
+    assert tab.excel_button.isEnabled()
+    assert tab.export_excel_to(tmp_path / "stats" / "my_data.xlsx")
+    assert "Data written to" in tab.status_label.text()
+    workbook = pd.read_excel(tmp_path / "stats" / "my_data.xlsx", sheet_name=None)
+    assert len(workbook["head_cast_rate_per_min"]) == 3               # three recordings ticked, unit = recording
 
     # The recordings now carry the pooled states, visible on the HMM tab.
     window.set_active_recording(RECORDINGS[0])

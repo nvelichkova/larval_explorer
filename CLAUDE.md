@@ -187,7 +187,7 @@ python -m larval_explorer             # launch the GUI
 
 Do not add a dependency without saying so explicitly and adding it to
 `requirements.txt`. Current stack: numpy, pandas, scipy, matplotlib, seaborn,
-scikit-learn, hmmlearn, PyQt5, pytest.
+scikit-learn, hmmlearn, PyQt5, openpyxl, pytest.
 
 ---
 

@@ -60,6 +60,10 @@ class AggregateTab(QWidget):
         self.fit_button = QPushButton("1. Fit one HMM across the ticked recordings")
         self.compare_button = QPushButton("2. Compare conditions")
         self.export_button = QPushButton("Export figure set…")
+        self.excel_button = QPushButton("Export data to Excel…")
+        self.excel_button.setToolTip("The numbers behind the figures, one row per unit, for running statistics.")
+        self.excel_button.clicked.connect(self.excel_dialog)
+        self.excel_button.setEnabled(False)
         self.fit_button.clicked.connect(self.fit_pooled)
         self.compare_button.clicked.connect(self.compare)
         self.export_button.clicked.connect(self.export_dialog)
@@ -93,6 +97,9 @@ class AggregateTab(QWidget):
         buttons.addWidget(self.compare_button)
         buttons.addWidget(self.export_button)
         left_layout.addLayout(buttons)
+        buttons = QHBoxLayout()
+        buttons.addWidget(self.excel_button)
+        left_layout.addLayout(buttons)
         left_layout.addWidget(self.status_label)
         left_layout.addWidget(self.warning_label)
         left_layout.addWidget(QLabel("n per condition"))
@@ -113,6 +120,7 @@ class AggregateTab(QWidget):
         for widget in (self.fit_button, self.compare_button, self.unit_combo, self.diagnostic_box, self.group_box):
             widget.setEnabled(idle)
         self.export_button.setEnabled(idle and self.comparison is not None)
+        self.excel_button.setEnabled(idle and self.comparison is not None)
         if self.host.busy:
             return
         registry = project.registry if project is not None else R.empty_registry()
@@ -194,6 +202,7 @@ class AggregateTab(QWidget):
             self.figures.set_builders({}, "Nothing to compare yet.")
             self.counts.set_table(None)
             self.export_button.setEnabled(False)
+            self.excel_button.setEnabled(False)
             return
         comparison, diagnostic = self.comparison, self.diagnostic
         builders = {
@@ -209,6 +218,7 @@ class AggregateTab(QWidget):
         self.counts.set_table(comparison.counts, "n per condition")
         self.warning_label.setText("\n".join(comparison.warnings))
         self.export_button.setEnabled(True)
+        self.excel_button.setEnabled(True)
 
     def export_to(self, folder) -> None:
         """Write the whole comparison set to a folder, in a worker."""
@@ -225,6 +235,33 @@ class AggregateTab(QWidget):
             self.status_label.setText(f"Exported to {manifest_path.parent}")
 
         self.host.run_in_background(export, done, self._failed)
+
+    def export_excel_to(self, path) -> bool:
+        """Write the current comparison's numbers to an Excel workbook."""
+        if self.comparison is None:
+            return False
+        try:
+            written = A.export_excel(path, self.comparison)
+        except PermissionError:
+            self.host.notify("Export data", f"Could not write {path}. If it is open in Excel, close it and try again.")
+            return False
+        except OSError as error:
+            self.host.notify("Export data", str(error))
+            return False
+        self.status_label.setText(f"Data written to {written}")
+        return True
+
+    def excel_dialog(self) -> None:
+        project = self.host.project
+        if project is None or self.comparison is None:
+            return
+        suggested = A.new_comparison_folder(project.output_root)
+        suggested.parent.mkdir(parents=True, exist_ok=True)
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export data to Excel", str(suggested.parent / f"{suggested.name}.xlsx"), "Excel workbook (*.xlsx)"
+        )
+        if path:
+            self.export_excel_to(path if path.lower().endswith(".xlsx") else path + ".xlsx")
 
     def export_dialog(self) -> None:
         project = self.host.project

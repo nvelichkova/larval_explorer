@@ -364,6 +364,8 @@ class Comparison:
     recording_ids: tuple[str, ...]
     hmm_pool: tuple[str, ...]
     warnings: tuple[str, ...]
+    # recording -> {grouping column: value}; lets exported tables carry genotype etc. as columns.
+    recording_groups: dict = field(default_factory=dict)
 
 
 def condition_labels(registry: pd.DataFrame, recording_ids: Sequence[str], group_keys: Sequence[str]) -> dict[str, str]:
@@ -401,6 +403,7 @@ def compare(
     conditions: dict[str, str],
     unit: str = DEFAULT_UNIT,
     group_keys: Sequence[str] = (),
+    recording_groups: dict | None = None,
 ) -> Comparison:
     """Summarise every measure per unit and label each unit with its condition.
 
@@ -494,6 +497,7 @@ def compare(
     return Comparison(
         values=values, counts=counts, unit=unit, group_keys=tuple(group_keys), conditions=ordered_conditions,
         recording_ids=recording_ids, hmm_pool=tuple(pool_ids) if len(pools) == 1 else (), warnings=tuple(warnings),
+        recording_groups=dict(recording_groups or {}),
     )
 
 
@@ -506,12 +510,123 @@ def compare_recordings(
         raise AnalysisError("Tick at least one recording.")
     conditions = condition_labels(project.registry, recording_ids, group_keys)
     data = [load_recording_data(project.pipeline(recording_id)) for recording_id in recording_ids]
-    return compare(data, conditions, unit, group_keys)
+    groups = {}
+    for recording_id in recording_ids:
+        metadata = R.metadata_for(project.registry, recording_id)
+        groups[recording_id] = {key: metadata[key].strip() for key in group_keys}
+    return compare(data, conditions, unit, group_keys, groups)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Export
 # ──────────────────────────────────────────────────────────────────────────────
+
+MEASURE_DEFINITIONS = {
+    MEASURE_OCCUPANCY: "Fraction of time in each filtered HMM state: summed RDP step duration in the state / total.",
+    MEASURE_DWELL: "Mean duration (s) of uninterrupted stays in a filtered HMM state, including stays cut by a track end.",
+    S.RHO: "Steering parameter rho: mean over the unit's fitted HMM segments, weighted by points fitted.",
+    S.KAPPA: "Steering parameter kappa: weighted as rho.",
+    S.MU: "Steering parameter mu: weighted as rho.",
+    S.SIGMA: "Steering parameter sigma: weighted as rho.",
+    MEASURE_HEAD_CAST_RATE: "Head casts per minute tracked.",
+    MEASURE_CRAWL_LENGTH: "Mean crawl length (mm).",
+}
+
+EXCEL_FILE = "comparison_data.xlsx"
+SHEET_ABOUT, SHEET_N, SHEET_LONG = "about", "n", "all_values_long"
+SHEET_STEERING = "steering_parameters"
+_ITEM, _DETAIL = "item", "value"
+
+
+def state_column(state: int, prefix: str = "") -> str:
+    """Header of a per-state column in the exported tables, e.g. ``state_0`` or ``rho_state_0``."""
+    return f"{prefix}_{S.STATE}_{state}" if prefix else f"{S.STATE}_{state}"
+
+
+def comparison_sheets(comparison: Comparison) -> dict[str, pd.DataFrame]:
+    """The comparison as tables laid out for statistics software.
+
+    ``all_values_long`` has one row per unit, measure and state. The other
+    data sheets hold one figure each, one row per unit, with a column per
+    state. Every data sheet carries the condition, the grouping columns
+    (genotype, ...), the recording and the unit, so rows can be nested or
+    used as a random effect.
+    """
+    keys = list(comparison.group_keys)
+    id_columns = [S.CONDITION, *keys, S.RECORDING_ID, S.UNIT_ID]
+
+    values = comparison.values.copy()
+    for key in keys:
+        values[key] = values[S.RECORDING_ID].map(lambda r, key=key: comparison.recording_groups.get(r, {}).get(key, ""))
+    long = values[[S.CONDITION, *keys, S.RECORDING_ID, S.UNIT_ID, S.MEASURE, S.STATE, S.VALUE]]
+    long = long.sort_values([S.MEASURE, S.CONDITION, S.RECORDING_ID, S.UNIT_ID, S.STATE], kind="mergesort")
+
+    def one_measure(measure: str) -> pd.DataFrame:
+        return values[values[S.MEASURE] == measure]
+
+    def by_state(measure: str, prefix: str = "") -> pd.DataFrame:
+        part = one_measure(measure)
+        columns = [state_column(state, prefix) for state in range(N_STATES)]
+        if not len(part):
+            return pd.DataFrame(columns=id_columns + columns)
+        wide = part.pivot_table(index=id_columns, columns=S.STATE, values=S.VALUE, aggfunc="first")
+        wide = wide.reindex(columns=range(N_STATES))
+        wide.columns = columns
+        return wide.reset_index()
+
+    def plain(measure: str) -> pd.DataFrame:
+        part = one_measure(measure)
+        return part[id_columns + [S.VALUE]].rename(columns={S.VALUE: measure}).sort_values(id_columns, kind="mergesort")
+
+    steering = None
+    for parameter in STEERING_MEASURES:
+        table = by_state(parameter, parameter)
+        steering = table if steering is None else steering.merge(table, on=id_columns, how="outer")
+    steering = steering.sort_values(id_columns, kind="mergesort")
+
+    about = [
+        ("unit (one row per)", comparison.unit),
+        ("grouped by", ", ".join(keys) if keys else "nothing: all recordings together"),
+        ("conditions", ", ".join(comparison.conditions)),
+        ("recordings", ", ".join(comparison.recording_ids)),
+        ("HMM fitted over", ", ".join(comparison.hmm_pool) if comparison.hmm_pool else "not one pooled fit"),
+        ("created", datetime.datetime.now().astimezone().isoformat(timespec="seconds")),
+        ("independence", "Units within a recording share a plate and a session; several track segments of one "
+                         "larva are not independent. Use recording_id (and the larva) as a grouping factor."),
+        ("blank cells", "No value: the unit never had a fitted HMM segment or a stay in that state. "
+                        "State occupancy and head-cast rate use 0 where the unit was tracked."),
+        ("statistics", "None computed here."),
+    ]
+    about += [(f"warning {i}", warning) for i, warning in enumerate(comparison.warnings, start=1)]
+    about += [(f"measure: {measure}", text) for measure, text in MEASURE_DEFINITIONS.items()]
+    about += [(f"library: {name}", version) for name, version in M.environment().items()]
+
+    return {
+        SHEET_ABOUT: pd.DataFrame(about, columns=[_ITEM, _DETAIL]),
+        SHEET_N: comparison.counts,
+        SHEET_LONG: long,
+        MEASURE_OCCUPANCY: by_state(MEASURE_OCCUPANCY),
+        MEASURE_DWELL: by_state(MEASURE_DWELL),
+        SHEET_STEERING: steering,
+        MEASURE_HEAD_CAST_RATE: plain(MEASURE_HEAD_CAST_RATE),
+        MEASURE_CRAWL_LENGTH: plain(MEASURE_CRAWL_LENGTH),
+    }
+
+
+def export_excel(path: Path, comparison: Comparison) -> Path:
+    """Write the numbers behind the comparison figures as one Excel workbook."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with pd.ExcelWriter(path, engine="openpyxl") as writer:
+        for name, table in comparison_sheets(comparison).items():
+            table.to_excel(writer, sheet_name=name[:31], index=False)
+            sheet = writer.sheets[name[:31]]
+            sheet.freeze_panes = "A2"
+            for index, column in enumerate(table.columns, start=1):
+                longest = max([len(str(column))] + [len(str(value)) for value in table[column].head(200)])
+                sheet.column_dimensions[sheet.cell(row=1, column=index).column_letter].width = min(60, longest + 2)
+    return path
+
 
 def export_comparison(
     folder: Path,
@@ -524,7 +639,7 @@ def export_comparison(
     """Write a comparison as one self-describing folder.
 
     The figures in vector and raster form, the values and counts they were
-    drawn from as CSV, and ``figure_manifest.json`` saying what each file is,
+    drawn from as CSV and as an Excel workbook, and ``figure_manifest.json`` saying what each file is,
     which recordings went in, how they were grouped, the unit, and n at each
     level. Returns the manifest path.
     """
@@ -534,6 +649,7 @@ def export_comparison(
     folder.mkdir(parents=True, exist_ok=True)
     comparison.values.to_csv(folder / "values.csv", index=False)
     comparison.counts.to_csv(folder / "counts.csv", index=False)
+    export_excel(folder / EXCEL_FILE, comparison)
     entries = {}
     for name, figure in figures.items():
         FigureCanvasAgg(figure)
@@ -553,7 +669,7 @@ def export_comparison(
         "n": comparison.counts.to_dict(orient="records"),
         "warnings": list(comparison.warnings),
         "figures": entries,
-        "data_files": ["values.csv", "counts.csv"],
+        "data_files": ["values.csv", "counts.csv", EXCEL_FILE],
         "dpi": dpi,
         "environment": M.environment(),
     }

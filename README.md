@@ -20,8 +20,10 @@ batch processing and comparison across experimental conditions.
 - **Runs many recordings unattended** (Batch tab). A recording that fails is
   reported and the rest carry on.
 - **Compares conditions** (Aggregate tab): one HMM fitted across recordings so
-  states are comparable, results grouped by genotype or any other metadata, and
-  a figure set exported as PDF, SVG and PNG with the underlying numbers.
+  states are comparable, results grouped by genotype or any other metadata, a
+  figure set exported as PDF, SVG and PNG, and the numbers behind the figures
+  exported to Excel (one row per larva, recording or track segment) for your
+  own statistics.
 
 Each CSV is one recording. Recordings are never merged; the only step that
 combines them is the pooled HMM fit, which you start explicitly.
@@ -31,7 +33,7 @@ combines them is the pooled HMM fit, which you start explicitly.
 - Windows (developed and tested on Windows 11)
 - Python 3.11
 - The packages in `requirements.txt`: numpy, pandas 2.x, scipy, matplotlib,
-  seaborn, scikit-learn, hmmlearn, PyQt5, pytest
+  seaborn, scikit-learn, hmmlearn, PyQt5, openpyxl, pytest
 
 ## Install
 
