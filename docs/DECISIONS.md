@@ -1167,3 +1167,390 @@ workbook reflects the unit chosen when it was exported: exporting by track
 segment gives more rows that are less independent. The CSVs remain for
 anything that prefers them.
 
+---
+
+## D-027 — Stage 12, turn kinematics: design accepted, phase T1 built
+**Date:** 2026-10-20 · **Status:** Accepted · **Phase:** stage 12 / T1
+
+**Context.** The user needs to know what fraction of a turn's net heading
+change has happened by the end of the head sweep. Their neuromechanical model
+gives about 0.20. The full design, its column definitions and the user's
+answers to eight questions are in `docs/TURN_KINEMATICS.md`. This entry
+records the choices that bind the code.
+
+**Decision.**
+- New stage 12, `core/turns.py`, params `TurnKinematicsParams`. No upstream
+  equivalent; excluded from the parity baseline like stage 02.
+- **No resampling.** FIM-Track gives five spine points, so there are three
+  interior boundaries (sp1–sp3). Bend positions are reported as a fractional
+  boundary index 1–3, as an arc fraction from the head (primary), and as the
+  model-equivalent boundary `11 × arc fraction` (indicative only: the model's
+  body T1…A8 has no cephalic region, FIM-Track's head point does).
+- **Heading axes:** `tail_sp2` primary biological; `tail_sp1` model-matched,
+  since the model's heading is tail → arc 3/11 and sp1 sits at arc ≈ 0.29;
+  `tail_sp3` and `tail_mom` for sensitivity; `tail_head` as a control that
+  must give a fraction near 1.
+- **Distance crawled** is tail displacement projected on the `tail_sp2` axis,
+  backward motion not counted, whatever heading axis is analysed. Segment
+  length is the track's mean body length (stage 04) ÷ 11.
+- **Input is stage 02's table, not stage 03's.** Stage 03 smooths the centre
+  of mass over 41 frames; stage 12 smooths every point it uses, centre of mass
+  included, with one Savitzky–Golay filter (window 7, order 2 by default).
+- **Contiguous tracks only.** Stage 12 refuses a track with missing frames, so
+  it needs stage 02 segmentation enabled. Smoothing across a gap would invent
+  spine shapes.
+- **Turn candidates are stage 09 head casts** (from T2). The pre-filter
+  candidate count per track must equal stage 09's `n_head_casts`, so stage 11's
+  cast rate and stage 12's turns reconcile.
+- **Bend peak** at the middle boundary is refined by a parabola through the
+  three boundaries; at an end boundary the integer is reported and flagged.
+  **Trailing edge** is the posterior-most 20%-of-peak crossing, linearly
+  interpolated; flagged as censored when sp3 is still above 20%. As the user
+  specified, it is posterior-most, not contiguous with the peak. An S-shaped
+  spine therefore reports the counter-bend's position.
+- **Flips** are detected on unsmoothed points (both ends land within 0.35 mm
+  of the other's previous position, or the tail→head axis turns more than 120°
+  in one frame), counted, and never corrected.
+- `TurnKinematicsParams` is not yet part of `PipelineParams`, the manifest or
+  the GUI. Stage 12 joins the pipeline in T3; the per-frame geometry is
+  reachable from a console and from `tools/turn_noise_floor.py`.
+
+**T1 result (noise floor).** On clean frames inside stage 09 crawls, both
+recordings, 21 tracks each: per-boundary bend SD 9–13°, head-angle SD 14–16°
+(95th percentile of |head angle| 29–34°), total bend median 23–27° (95th
+percentile 50–59°). Going from a 5- to an 11-frame window lowers these by only
+5–10%, so the spread is not frame-to-frame pixel jitter. It is real crawling
+bends, or tracker spine-fit error that is correlated over time, or both, and
+smoothing cannot remove either. Path length of the tail exceeds the forward
+distance by 20–100% and falls with smoothing, while the forward distance does
+not. This supports the forward-projected measure (Q4).
+
+**Consequences.** The turn thresholds proposed in the design (onset 15°,
+sweep 20°, end total bend 30°) sit inside the crawling spread and must be
+revised before T2. Bend measures near the floor (a total bend under ~30°)
+cannot locate a peak meaningfully. Undoing the no-resampling rule would need
+a spine source with more points than FIM-Track exports.
+
+---
+
+## D-028 — `is_well_oriented` is ignored upstream; stage 12 excludes those frames
+**Date:** 2026-10-20 · **Status:** Exclusion rule Superseded by D-029; the observation stands · **Phase:** stage 12 / T1
+
+**Context.** FIM-Track exports `is_well_oriented`. No upstream script reads
+it (D-017), so stages 09–11 treat every frame as correctly oriented. On the
+two available recordings the flag is 0 on 8.9% (amiGA-amRNAi) and 6.2%
+(w1118) of frames after segmentation, in runs of median 10–13 frames and up
+to 1100 frames (110 s). 242 of the 243 head/tail flips that stage 12 detects
+sit next to a frame with the flag at 0, and there are about as many flips as
+runs of the flag. The likely reading is that the flag marks spells in which
+the tracker's head and tail labels are swapped. That is not confirmed from
+FIM-Track's documentation.
+
+**Decision.** Stage 12 excludes any turn containing a frame with
+`is_well_oriented == 0` (switchable, on by default; user decision Q7). Stages
+00–11 are unchanged: they reproduce upstream, which ignores the flag.
+
+**Reasoning.** If the flag marks swapped labels, a head cast detected there
+was measured on the tail. Stage 09's anterior angular velocity would then be
+the posterior's, and its body angle would be mirrored. Excluding is safer than
+correcting a swap whose meaning is unconfirmed.
+
+**Consequences.** Stage 12's turn set is a strict subset of the head casts
+stage 11 counts, for a reason upstream does not apply. Turn counts in the two
+stages will differ, and the censoring report states by how much. The flagged
+fraction differs between the two genotypes (8.9% vs 6.2%), so this exclusion
+may remove different turns in each, and its bias check matters. The
+upstream head-cast rate (stage 11, Phase 5 aggregation) may include casts
+measured on swapped spines. Whether to filter stage 09 too is the user's
+decision. It would be a departure from upstream and would need its own entry.
+
+---
+
+## D-029 — `is_well_oriented` mixes swaps with strong bends; flag exclusion would bias turns (PROPOSED)
+**Date:** 2026-10-20 · **Status:** Accepted 2026-10-20; tie-break rule, motion evidence and per-larva figures Superseded by D-030 · **Phase:** stage 12 / pre-T2
+
+**Context.** Before T2 the user asked for two read-only checks
+(`tools/diagnose_turn_confounds.py`): does the crawling noise floor differ
+between genotypes, and how much does excluding not-well-oriented casts move
+stage 11's head-cast rate? Neither changes any stage.
+
+**Findings.**
+
+*Floor by genotype* (one recording each, so genotype is confounded with plate
+and session; 6 and 5 larvae with kept segments). The gap between recording
+medians, in units of the between-larva SD: head-angle SD −0.48, 95th
+percentile of |head angle| −0.42, bend SD at sp1 +0.37 and at sp3 +0.34,
+total-bend 25th percentile +0.84 (17.0° vs 18.3°), median +0.69, 95th
+percentile −0.20. The exception is bend SD at sp2, at −1.15 (11.1° vs 9.2°).
+Crawl forward speed differs by +1.8 SD (0.64 vs 0.89 mm/s); body length does
+not (3.52 vs 3.50 mm). So the angle floor is similar, apart from sp2, but
+speed is not. Speed matters for the distance-based measures and for the
+end-of-turn forward-speed criterion.
+
+*Cast-rate exposure.* 105 of 203 (52%) and 117 of 211 (55%) stage 09 head
+casts contain a not-well-oriented frame, although only 6–9% of frames are
+flagged. A recount reproduces stage 11's `n_headcasts` exactly in every HMM
+segment. Leaving flagged casts out roughly halves the rate: in amiGA-amRNAi's
+5 HMM segments the median falls from 0.053 to 0.019 Hz, by up to 75% in one
+segment. Per larva the casts per minute fall by 27–75%. w1118 has no HMM
+segment that passes stages 08/11 at default settings, so for it only the per-larva
+rate exists.
+
+*What the flag marks.* Two independent signs, each pointing a different way:
+- The flag tracks posture. P(flag) rises from 1–3% at |head angle| < 15° to
+  72–83% above 90°, and from under 1% at total bend < 25° to 84% above 150°.
+- During flagged spells, 56–58% of moving frames move tail-first along the
+  tail→sp2 axis, against 7–8% in well-oriented frames. Swapped labels produce
+  exactly this; real larvae rarely back up that much.
+- Flagged runs: roughly a third have a detected flip at both ends, a third at
+  one end, and a third at neither.
+
+The flag is therefore neither a clean swap marker (D-028's inference, too
+strong) nor a pure posture flag. It covers both genuine head/tail swap spells
+and strongly bent frames whose orientation the tracker is unsure of.
+
+**Proposed decision.** Excluding on the flag (D-028, Q7) would drop more than
+half of all turns, and most of all the large ones, since the flag rises with
+bend. That is the censoring bias the design exists to catch. It would push the
+headline fraction toward whatever small turns do. Proposed instead:
+- Stage 12 excludes turns on **geometric evidence of a swap**: a detected flip
+  in the window, or sustained tail-first motion along the posterior axis.
+  (This needs one new parameter, agreed with the user before T2.)
+- Flag-based exclusion is kept as a **sensitivity variant**, reported beside
+  the primary result, never as the default.
+- Stages 00–11 stay unchanged. The halving of the cast rate is a property of
+  the existing analysis, and is recorded here. Any upstream change waits until
+  the swap fraction within flagged casts is known.
+
+**Consequences if accepted.** D-028's exclusion rule is superseded. Its
+observation (no upstream stage reads the flag) stands. The swap detector
+becomes load-bearing and needs its own synthetic and hand-checked tests.
+
+---
+
+## D-030 — Head/tail labels by continuity; pieces oriented by motion; larva numbers from segment IDs
+**Date:** 2026-10-20 · **Status:** Accepted · **Phase:** stage 12 / T2 · **Supersedes** parts of D-027 (flip rule) and D-029 (tie-break, evidence, per-larva figures)
+
+**Context.** The user accepted D-029, with one change. Swaps were to be
+classified by bracketing flips, and tail-first motion used only to break
+one-ended ties, because real reversals cluster around turns. Building that
+exposed three problems.
+
+**Findings.**
+1. *Tail-first motion does not tell swapped runs from bent ones.* Its median
+   share is 0.61 in runs with flips at both ends and 0.59 in runs with none.
+   About 50% is what *no consistent direction* looks like. D-029 read 56%
+   tail-first in flagged frames as evidence of swaps; that was wrong. A swapped
+   *crawling* larva would show about 92%.
+2. *Label continuity is a threshold-free swap detector.* Between consecutive
+   frames, the labels have swapped if the crossed matching (head to old tail,
+   tail to old head) costs less distance than the straight one. It agrees with
+   the D-027 two-threshold rule on 239 of 246 jumps; fewer than 0.1% of frames
+   are near a tie. It confirms the bracketing reading: runs with flips at both
+   ends have a median 1.0 of frames on swapped labels, runs with neither 0.0.
+3. *Which side of a jump is correct is a local question.* A parity carried
+   along a whole track drifts after one missed jump. Splitting at jumps and
+   orienting each label-constant piece by its own net motion is robust. No
+   piece of 5 s or longer moves tail-first; tail-first pieces are all under
+   5 s and 90–92% flagged. Swapped frames total 374 and 319, under 1% of
+   tracking.
+4. *Bug:* `schema.larva_index` read the trailing digits of an ID, which for a
+   stage 02 segment ID (`…__larva10__seg1`) is the **segment** number. Existing
+   callers were unaffected: Phase 5 takes larva numbers from stage 02's
+   `track_segments` table and calls `larva_index` only on `larva(N)` and
+   `trajectory_0_N`. But the stage 12 code and the per-larva figures in D-029
+   grouped by segment number. Corrected per-larva figures: amiGA-amRNAi 8
+   larvae, w1118 13 larva IDs (several probably one animal renumbered by
+   FIM-Track). The gap between recordings in between-larva SD: total-bend
+   median +1.06, 25th percentile +0.96, bend SD at sp1 +1.06, at sp2 −0.54,
+   head-angle SD −0.39, crawl forward speed **+1.38** (0.61 vs 1.02 mm/s).
+
+**Decision.**
+- `detect_flips` is label continuity (no parameters); `flip_match_mm` and
+  `flip_axis_jump_deg` are removed.
+- `label_pieces` splits each track at jumps and calls a piece `correct` if at
+  least `piece_orientation_share` (0.7) of its tail motion along the posterior
+  axis is head-first, `swapped` if at most 0.3, else `unresolved`. Frames within
+  half a smoothing window of a jump, plus one, are left out. Motion only decides
+  which side of a geometric jump is right; it is never a swap criterion on its
+  own. The flag is not used.
+- Stage 12 excludes a turn with a label jump in its padded window, or with any
+  `swapped` or `unresolved` frame. Flag exclusion is reported only as the
+  sensitivity row of the censoring table.
+- `schema.larva_index` recognises segment IDs first (tested).
+
+**Consequences.** The `label_jump` filter drops the largest turns (median cast
+peak head angle 134–148° dropped vs 53–74° kept). This is the main remaining
+censoring bias and is reported. Correcting labels across a jump, rather than
+excluding the turn, would recover some of these turns. That is a separate
+proposal. A third of jumps (45/131, 35/115) sit between two `correct` pieces
+and are unexplained (docs/FINDING_head_cast_orientation.md).
+
+---
+
+## D-031 — Stage 12 T2: turn thresholds, end rule, and the refusal to contrast single recordings
+**Date:** 2026-10-20 · **Status:** Accepted · **Phase:** stage 12 / T2
+
+**Decision.**
+- **Sweep** threshold 30° on |head angle|: the crawl 95th percentile, so about
+  5% of crawl frames cross it. That is tolerable only because stage 09 also
+  requires amplitude (30° body amplitude) and duration. **Do not lower it.**
+- **Onset** 15° (unchanged): above the crawl median |head angle| (10–11°).
+- **End**, total bend: the 25th percentile of crawling total bend, **pooled
+  across every recording in the analysis**, passed to the stage explicitly
+  (`end_total_bend_deg`; the stage refuses to run without it). The
+  per-recording values are reported beside it. The two recordings here give
+  15.51° and 18.54°; pooled, 16.62°. A per-recording value would make the
+  definition of "turn end" differ by genotype.
+- **End**, speed: forward tail speed above **25% of the larva's own median
+  crawl forward speed**, so that "has resumed crawling" means the same in fast
+  and slow animals. The crawl speeds differ between the recordings by 1.4 SD.
+  The absolute rule (0.1 body length/s) is the sensitivity variant. On these
+  data the two rules give the same headline to two decimals.
+- **Bend-travel fit**: frames with total bend ≥ 55° (crawl 95th percentile).
+- **Candidates** are stage 09's head casts; the stage asserts the per-track
+  count equals stage 09's `n_head_casts`.
+- **Conditions:** the T3 summary will refuse to emit a condition contrast when
+  any condition has only one recording. Single-recording conditions yield
+  per-condition descriptive numbers only.
+
+**Consequences.** A larva whose stage 09 "crawls" are largely stationary has a
+near-zero reference speed (amiGA-amRNAi larva 1: 0.045 mm/s). For it the
+relative speed criterion does almost nothing. Stage 09 crawls are spine-length
+cycles and include near-stationary oscillation.
+
+---
+
+## D-032 — Bends are signed walking tail → head
+**Date:** 2026-10-20 · **Status:** Accepted · **Phase:** stage 12 / T2 · **Supersedes** the bend sign of D-027
+
+**Context.** D-027 signed bends as specified, walking head→tail (angle from
+p[i−1]→p[i] to p[i]→p[i+1]). The head angle, from stage 09, runs posterior
+to anterior. A +117° head angle therefore came with bends of −51° and −83°.
+
+**Decision.** Bends are signed walking tail→head: at boundary i, the angle
+from p[i+1]→p[i] to p[i]→p[i−1]. A C-shaped spine now has every bend the same
+sign as its head angle (tested). **The model walks head→tail, so its signed
+bends are the negatives of these.** Negate one side before comparing signed
+bends directly. No current output depends on the sign: peaks, trailing
+edges, totals and the travel fit all use |bend|.
+
+---
+
+## D-033 — Correct head/tail swaps instead of excluding the turns around them
+**Date:** 2026-10-20 · **Status:** Accepted · **Phase:** stage 12 / T2
+
+**Context.** Excluding turns with a label jump dropped the largest turns
+(median cast peak head angle 125–148° dropped against 53–75° kept). That is
+the bias that ended the `is_well_oriented` rule (D-029), arriving by another
+route. A swap is an exact relabelling, so the user asked for correction to be
+a prerequisite for T3.
+
+**Decision.**
+- `prepare_recording` exchanges head↔tail and sp1↔sp3 in every frame of a
+  piece oriented `swapped`, recomputes the geometry, and repeats until no
+  piece is swapped (at most 3 passes). Only stage 12's copy is changed.
+  `labels_corrected` marks the frames; `n_label_corrected_frames` is a turn
+  column. `correct_swapped_labels=False` gives the exclusion variant.
+- **Orientation of a piece** (`orientation_basis`):
+  - `motion`: at least `piece_min_motion_frames` (7) usable frames, and a head-first
+    share ≥ 0.7 (correct) or ≤ 0.3 (swapped);
+  - `bracketing_jumps`: a piece **too short** for motion (flicker) is the
+    opposite of a motion-decided neighbour across its jump. Both neighbours, if
+    motion-decided, must agree;
+  - `unresolved`: otherwise, including long pieces with indecisive motion;
+  - `tail_first_without_correct_neighbour`: a tail-first piece with no
+    correctly oriented neighbour across a jump. It stays unresolved and its
+    turns are excluded, never relabelled, because it may be a genuine reversal.
+
+**What was tried and rejected.** Bracketing applied to *every* unresolved
+piece relabelled 4151 and 2646 frames. The labelled tail then still moved
+first in 42% and 55% of moving frames, against 6–12% elsewhere. A 1312-frame
+run that leaned head-first at 0.67 was flipped to tail-first. Bracketing is
+therefore restricted to pieces too short for motion evidence.
+
+**Validation (final rule).**
+- 519 and 407 frames relabelled; label jumps fall from 131 to 42 and from 115
+  to 42. Of the remaining jumps, the earlier unexplained jumps between two
+  correctly oriented pieces were mostly flicker pieces of 1–3 frames, which
+  the old rule had oriented from meaningless motion.
+- Independent of motion direction, on unsmoothed steps away from any jump:
+  the labelled head out-steps the labelled tail in 37% and 39% of relabelled
+  frames as exported, and in 59% and 59% after correction. Never-relabelled
+  frames: 50.5% and 51.7%.
+- `label_jump` exclusions fall from 25 to 8 and from 29 to 11. The filter
+  still drops larger turns (flagged), as does `coiled`.
+- Exact-inversion test: a turn with a swapped spell planted inside it
+  reproduces the clean turn to 1e-9. So does a 2-frame flicker.
+
+**Consequences.** Some casts in the existing stage 09–11 outputs straddle
+swaps that stage 12 now corrects; stages 00–11 are unchanged (parity). The
+remaining 42 jumps per recording are around unresolved pieces and keep their
+turns excluded.
+
+---
+
+## D-034 — Signed fraction and heading curves are primary; the synthetic control pins the definitions
+**Date:** 2026-10-20 · **Status:** Accepted · **Phase:** stage 12 / T2 · **Retires** the model value 0.20 of D-027
+
+**Decision.**
+- **Signed fraction is primary**, reported as a distribution (quantiles,
+  share negative) with the absolute fraction alongside. The absolute ratio
+  averages turns where the sweep helps with turns where it opposes, so its mean
+  is not "how much of the turn the sweep does".
+- **Heading curves are the primary output.** For every turn with a fraction,
+  the cumulative signed heading change as a fraction of the turn's own total
+  is recorded on three abscissae: normalised progress (onset 0, end 1),
+  forward tail distance since onset in segment lengths, and time since onset
+  (`heading_curves`; `curve_summary` gives median and quartiles). The scalar is
+  the curve read at the sweep end; `sweep_end_progress` and
+  `sweep_end_distance_seglen` place it.
+- **Sweep end with hysteresis.** A sweep starts at |head angle| ≥ 30° and
+  lasts while the sign holds and |head angle| ≥ 0.6 × its running maximum
+  (`sweep_release_fraction`, the value in the generator's own reader). The
+  strict "≥ 30° throughout" rule ended slow sweeps early when pixel noise dipped
+  below 30°: a median of 20 frames (2 s) early on slow_bend, which turned a
+  true +0.24 into +0.04.
+- **No model number is quoted from outside the pipeline.** The model is
+  compared only through `tools/synthetic_control.py` on the fixture in
+  `tests/data/synthetic/` (copied as received, gzip-compressed, with hashes).
+  0.20 is retired; 0.231 (the truth file's ideal) is meaningful only through
+  this code path.
+
+**Synthetic results (`tools/synthetic_control.py`).**
+- *Geometry is sound.* At the true boundaries and true sweep end on
+  `tail_sp1`, stage 12 gives −0.129 (fast) and +0.240 (slow), against the truth
+  file's clean 5-point −0.139 and +0.249.
+- *Stage 12's own boundary rules work once handed a turn.* With the true sweeps
+  as head casts, the median onset and sweep-end errors are within 2 frames and
+  the end is 0.35–0.55 s late. 75 of 96 and 56 of 83 turns are included.
+  Signed fraction on `tail_sp1`: fast median −0.115 (truth −0.251), 92%
+  negative (truth 97%); slow +0.276 (truth +0.239), 2% negative (truth 0%).
+  **The sign survives; the magnitude is biased differently per condition**:
+  compressed for fast, inflated for slow. The bias enters at the reduction to
+  5 points, as SYNTHETIC.md found. `tests/test_synthetic_control.py` pins the
+  timing and the sign, not the magnitude.
+- *Stage 09 does not detect the model's turns.* Only 12% and 19% of true
+  turns ≥ 15° overlap any detected turn. The model's sweeps take 2.6 s
+  (fast_bend) and 4.4 s (slow_bend), at 11–19°/s, against 0.6–0.85 s and
+  67–99°/s in the detected real turns. Stage 09's angular-velocity threshold
+  passes them by and picks up the model's fast 20° wiggles instead. The
+  comparison is partly circular, since real sweeps that slow would be missed
+  too. Either way, there is no end-to-end synthetic number through stage 09.
+- *The model's 52% counter-rotating pools two conditions*: slow_bend 0%,
+  fast_bend 97% (truth). Each model condition is almost all one sign, whereas
+  each real recording is a mixture: 26% and 34% negative on `tail_sp1`.
+- *Curves differ in shape.* On `tail_sp1` the model's median curve dips first
+  (slow −0.07, fast −0.36 by 30% of the turn) and its sweep ends at 38–42% of
+  the turn. Real median curves rise from the start (+0.02 to +0.04 at 10%)
+  and their sweep ends at 16–18%. The selection differs (truth-seeded versus
+  stage 09), so this is not yet a like-for-like result.
+
+**Consequences.** The real headline is compared with the model's value
+*through the pipeline*, for the same condition. For the default model
+(slow_bend, `migK` 0.6) that is +0.276 on `tail_sp1` (median, truth-seeded),
+not 0.231. Condition contrasts of the magnitude remain untrustworthy (SYNTHETIC.md); the
+share negative is the robust quantity. A like-for-like end-to-end comparison
+needs either a detector that finds slow sweeps or model turns at real sweep
+speeds.
+

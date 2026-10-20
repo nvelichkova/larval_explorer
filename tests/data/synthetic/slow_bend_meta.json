@@ -1,0 +1,23 @@
+{
+  "source": "larval locomotion sandbox, synthetic",
+  "condition": "slow_bend",
+  "model_params": {
+    "migK": 0.6
+  },
+  "larvae": 8,
+  "duration_s": 900,
+  "mm_per_px": 0.117,
+  "fps": 10,
+  "spinepoint_arc_fractions": [
+    0,
+    0.29,
+    0.54,
+    0.79,
+    1
+  ],
+  "model_segments": 11,
+  "model_segment_length_mm": 0.3636,
+  "model_body_mm": 4,
+  "model_heading_axis": "tail -> midline point 3 (arc 0.27)",
+  "note": "coordinates are whole pixels; truth file carries the un-degraded answer"
+}

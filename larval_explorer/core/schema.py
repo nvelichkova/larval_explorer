@@ -209,6 +209,158 @@ N_CRAWLS_IN_SEGMENTS = "n_crawls_in_segments"
 N_HEADCASTS_IN_SEGMENTS = "n_headcasts_in_segments"
 N_HEADCAST_THETA_POINTS = "n_headcast_theta_points"
 
+# Stage 12 - turn kinematics (docs/TURN_KINEMATICS.md). No upstream equivalent,
+# so canonical and written names coincide. Angles are in degrees on disk.
+HEAD_ANGLE_DEG = "head_angle_deg"
+TOTAL_BEND_DEG = "total_bend_deg"
+BEND_PEAK_BOUNDARY = "bend_peak_boundary"
+BEND_PEAK_ARC_FRACTION = "bend_peak_arc_fraction"
+BEND_PEAK_MODEL_BOUNDARY = "bend_peak_model_boundary"
+BEND_PEAK_AT_EDGE = "bend_peak_at_edge"
+BEND_TRAIL_BOUNDARY = "bend_trail_boundary"
+BEND_TRAIL_ARC_FRACTION = "bend_trail_arc_fraction"
+BEND_TRAIL_MODEL_BOUNDARY = "bend_trail_model_boundary"
+BEND_TRAIL_CENSORED = "bend_trail_censored"
+TAIL_FORWARD_SPEED_MM_S = "tail_forward_speed_mm_s"
+POSTERIOR_DISTANCE_MM = "posterior_distance_mm"
+TAIL_PATH_LENGTH_MM = "tail_path_length_mm"
+SPINE_FLIP = "spine_flip"
+QUANTITY = "quantity"
+NOISE_SD = "noise_sd"
+N_FRAMES = "n_frames"
+MEDIAN_ABS = "median_abs"
+# Stage 12 label pieces: stretches between head/tail label jumps (D-030).
+PIECE_INDEX = "piece_index"
+PIECE_START_S = "piece_start_s"
+PIECE_END_S = "piece_end_s"
+HEAD_FIRST_SHARE = "head_first_share"
+FLAGGED_FRACTION = "flagged_fraction"
+ORIENTATION = "orientation"
+ORIENTATION_CORRECT = "correct"
+ORIENTATION_SWAPPED = "swapped"
+ORIENTATION_UNRESOLVED = "unresolved"
+LABELS_CORRECTED = "labels_corrected"
+ORIENTATION_BASIS = "orientation_basis"
+BASIS_MOTION = "motion"
+BASIS_BRACKETING = "bracketing_jumps"
+BASIS_UNRESOLVED = "unresolved"
+BASIS_UNANCHORED = "tail_first_without_correct_neighbour"
+N_CORRECTED_FRAMES = "n_label_corrected_frames"
+
+# Stage 12 heading curves (D-034): cumulative signed heading change through a turn.
+CURVE = "curve"
+CURVE_X = "x"
+FRACTION_OF_TOTAL = "fraction_of_total"
+DPSI_INTO_TURN_DEG = "dpsi_into_turn_deg"
+CURVE_PROGRESS = "progress"
+CURVE_DISTANCE = "distance_seglen"
+CURVE_TIME = "time_s"
+SWEEP_END_PROGRESS = "sweep_end_progress"
+SWEEP_END_DISTANCE_SEGLEN = "sweep_end_distance_seglen"
+TURN_DISTANCE_SEGLEN = "turn_distance_seglen"
+N_TURNS = "n_turns"
+MEDIAN, Q25, Q75 = "median", "q25", "q75"
+
+# Stage 12 turns table (docs/TURN_KINEMATICS.md §5.1).
+TURN_INDEX = "turn_index"
+T_ONSET_S = "t_onset_s"
+T_SWEEP_END_S = "t_sweep_end_s"
+T_MAX_BEND_S = "t_max_bend_s"
+T_END_S = "t_end_s"
+HEAD_CAST_START_S = "head_cast_start_s"
+HEAD_CAST_END_S = "head_cast_end_s"
+CAST_PEAK_HEAD_ANGLE_DEG = "cast_peak_head_angle_deg"
+HEADING_AXIS = "heading_axis"
+DPSI_SWEEP_DEG = "dpsi_sweep_deg"
+DPSI_TOTAL_DEG = "dpsi_total_deg"
+FRAC_HEADING_IN_SWEEP = "frac_heading_in_sweep"
+FRAC_HEADING_IN_SWEEP_SIGNED = "frac_heading_in_sweep_signed"
+PEAK_HEAD_ANGLE_DEG = "peak_head_angle_deg"
+N_SWEEPS = "n_sweeps"
+MULTI_SWEEP = "multi_sweep"
+TURN_DURATION_S = "turn_duration_s"
+SWEEP_DURATION_S = "sweep_duration_s"
+MAX_TOTAL_BEND_DEG = "max_total_bend_deg"
+BEND_TRAVEL_PER_SEGLEN = "bend_travel_per_seglen"
+BEND_TRAVEL_PER_WAVE = "bend_travel_per_wave"
+BEND_TRAVEL_R2 = "bend_travel_r2"
+BEND_TRAVEL_N_FRAMES = "bend_travel_n_frames"
+BEND_TRAVEL_DISTANCE_SEGLEN = "bend_travel_distance_seglen"
+SEGMENT_LENGTH_MM = "segment_length_mm"
+BODY_LENGTH_MM = "body_length_mm"
+STRIDE_SEGLEN = "stride_seglen"
+LARVA_CRAWL_SPEED_MM_S = "larva_crawl_speed_mm_s"
+END_SPEED_THRESHOLD_MM_S = "end_speed_threshold_mm_s"
+N_INTERPOLATED_FRAMES = "n_interpolated_frames"
+N_FLAGGED_FRAMES = "n_not_well_oriented_frames"
+LABEL_JUMP_IN_WINDOW = "label_jump_in_window"
+WINDOW_ORIENTATION = "window_orientation"
+INCLUDED = "included"
+EXCLUSION_REASON = "exclusion_reason"
+FRAC_COMPUTED = "frac_computed"
+
+
+def model_axis_column(column: str) -> str:
+    """The same per-turn quantity on the model-matched heading axis (D-027 Q3)."""
+    return column.replace("_deg", "_model_axis_deg") if column.endswith("_deg") else f"{column}_model_axis"
+
+
+def at_max_column(column: str) -> str:
+    """A per-frame bend-position column evaluated at the moment of maximum total bend."""
+    return f"{column}_at_max"
+
+
+# Exclusion reasons, in the order they are applied.
+EXCLUDE_ONSET_NOT_FOUND = "onset_not_found"
+EXCLUDE_NO_SWEEP = "no_sweep"
+EXCLUDE_END_NOT_FOUND = "end_not_found"
+EXCLUDE_NEAR_TRACK_EDGE = "near_track_edge"
+EXCLUDE_INTERPOLATED = "interpolated_frames"
+EXCLUDE_LABEL_JUMP = "label_jump"
+EXCLUDE_SWAPPED = "labels_swapped"
+EXCLUDE_UNRESOLVED = "orientation_unresolved"
+EXCLUDE_COILED = "coiled"
+EXCLUSION_ORDER = (
+    EXCLUDE_ONSET_NOT_FOUND, EXCLUDE_NO_SWEEP, EXCLUDE_END_NOT_FOUND, EXCLUDE_NEAR_TRACK_EDGE,
+    EXCLUDE_INTERPOLATED, EXCLUDE_LABEL_JUMP, EXCLUDE_SWAPPED, EXCLUDE_UNRESOLVED, EXCLUDE_COILED,
+)
+SMALL_TURN = "small_turn"  # not an exclusion: the turn stays, only its fraction is blank
+
+# Stage 12 censoring report.
+FILTER = "filter"
+N_IN, N_DROPPED, N_OUT = "n_in", "n_dropped", "n_out"
+DROPPED_MEDIAN_CAST_PEAK_DEG = "dropped_median_cast_peak_head_angle_deg"
+KEPT_MEDIAN_CAST_PEAK_DEG = "kept_median_cast_peak_head_angle_deg"
+MANNWHITNEY_P = "mannwhitney_p"
+BIASED_TOWARD_LARGE_TURNS = "biased_toward_large_turns"
+CANDIDATES = "candidates"
+DROPPED_MEDIAN_ABS_DPSI_TOTAL_DEG = "dropped_median_abs_dpsi_total_deg"
+KEPT_MEDIAN_ABS_DPSI_TOTAL_DEG = "kept_median_abs_dpsi_total_deg"
+SENSITIVITY_NOT_WELL_ORIENTED = "sensitivity:not_well_oriented"
+SPINE_SG_WINDOW = "spine_sg_window"
+
+# Stage 12 per-larva reference values.
+STRIDE_MM = "stride_mm"
+N_STRIDES = "n_strides"
+N_REFERENCE_FRAMES = "n_crawl_reference_frames"
+P95_ABS = "p95_abs"
+
+
+def bend_column(boundary: int) -> str:
+    """Signed bend angle (degrees) at spine boundary 1, 2 or 3 (1 = most anterior)."""
+    return f"bend_{boundary}_deg"
+
+
+def boundary_arc_column(boundary: int) -> str:
+    """Arc fraction from the head (0) to the tail (1) of spine boundary 1, 2 or 3."""
+    return f"boundary_{boundary}_arc_fraction"
+
+
+def heading_column(axis: str) -> str:
+    """Unwrapped heading (degrees) of one body axis, e.g. ``heading_tail_sp2_deg``."""
+    return f"heading_{axis}_deg"
+
+
 STEERING_PARAMETERS = (RHO, KAPPA, MU, SIGMA)
 STEERING_SUMMARY_PARAMETERS = (RHO, KAPPA, MU, ABS_MU, SIGMA)
 
@@ -456,10 +608,18 @@ UPSTREAM_VIDEO_INDEX = 0
 
 _LARVA_LABEL = re.compile(r"^larva\((\d+)\)$")
 _TRAILING_INDEX = re.compile(r"(\d+)\)?$")
+_SEGMENT_LARVA = re.compile(r"__larva(\d+)__seg\d+$")
 
 
 def larva_index(track_id: str) -> int:
-    """Larva number from ``larva(7)``, ``trajectory_0_7`` or any ID ending in digits."""
+    """Larva number from ``larva(7)``, ``trajectory_0_7``, a stage 02 segment ID
+    ``<recording>__larva7__seg2``, or any ID ending in digits.
+
+    A segment ID ends in its segment number, so it is matched first (D-030).
+    """
+    segment = _SEGMENT_LARVA.search(str(track_id))
+    if segment is not None:
+        return int(segment.group(1))
     match = _TRAILING_INDEX.search(str(track_id))
     if match is None:
         raise SchemaError(f"Cannot read a larva number from track ID '{track_id}'.")

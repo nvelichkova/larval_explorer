@@ -167,6 +167,100 @@ class SteeringParams:
     crawl_length_kde_bw_min: float = 1e-3
 
 
+HEADING_AXES = ("tail_sp3", "tail_sp2", "tail_sp1", "tail_mom", "tail_head")
+
+
+@dataclass(frozen=True)
+class TurnKinematicsParams:
+    """Stage 12 - turn kinematics (docs/TURN_KINEMATICS.md, D-027).
+
+    No upstream equivalent, so no default here is an upstream value; each was
+    agreed with the user. Phase T1 holds the per-frame geometry only; the turn
+    segmentation thresholds are added in T2, after the noise floor is reviewed.
+    """
+
+    # Temporal Savitzky-Golay smoothing of the integer-pixel spine points.
+    spine_sg_window: int = 7
+    spine_sg_order: int = 2
+    # Primary biological axis, and the axis matching the model's heading (tail
+    # to arc 3/11, D-027 Q3).
+    heading_axis: str = "tail_sp2"
+    model_heading_axis: str = "tail_sp1"
+    sensitivity_axes: tuple[str, ...] = HEADING_AXES
+    # Model body: 11 segments T1...A8; model boundary i sits at arc i/11.
+    n_body_segments: int = 11
+    # Bend trailing edge: posterior-most position carrying this fraction of the peak.
+    trail_fraction_of_peak: float = 0.2
+    # Head/tail labels: a track is split where the labels jump (no threshold,
+    # D-030); each piece is ``correct`` if at least this share of the tail's
+    # motion along the posterior axis is head-first, ``swapped`` if at most
+    # 1 minus this share, otherwise ``unresolved``.
+    piece_orientation_share: float = 0.7
+    # Motion decides a piece's orientation only with at least this many usable
+    # frames; shorter pieces (tracker flicker) are decided by their bracketing
+    # jumps (D-033). One smoothing window.
+    piece_min_motion_frames: int = 7
+    # Relabel frames in swapped pieces instead of excluding the turns around
+    # them (D-033). False gives the exclusion variant, for sensitivity.
+    correct_swapped_labels: bool = True
+
+    # ── Turn segmentation (phase T2; thresholds from the T1 noise floor, D-031) ──
+    # Onset: the last frame at or before the cast start with |head angle| below this.
+    onset_head_angle_deg: float = 15.0
+    max_onset_lookback_s: float = 2.0
+    # A sweep is a run of frames with |head angle| at or above this. 30 deg is the
+    # 95th percentile of crawling |head angle|: about 5% of crawl frames cross it,
+    # tolerable only because stage 09 also requires amplitude and duration. Do not
+    # lower it.
+    sweep_head_angle_deg: float = 30.0
+    # A sweep continues while |head angle| stays above this fraction of its
+    # running maximum (hysteresis, D-034); 0.6 is the synthetic generator's
+    # own reader's value.
+    sweep_release_fraction: float = 0.6
+    # End: `end_hold_frames` consecutive frames with total bend below
+    # `end_total_bend_deg` and forward tail speed above the speed threshold.
+    # `end_total_bend_deg` is the pooled crawl percentile below, computed across
+    # every recording in the analysis and passed in explicitly; None means "not
+    # yet set" and the stage refuses to run.
+    end_total_bend_deg: float | None = None
+    end_total_bend_crawl_percentile: float = 25.0
+    # Speed threshold relative to the larva's own median crawl forward speed, so
+    # "has resumed crawling" means the same in fast and slow animals. The
+    # absolute variant (body lengths per second) is the sensitivity check.
+    end_speed_mode: str = "relative"
+    end_speed_fraction_of_crawl: float = 0.25
+    end_speed_absolute_bl_s: float = 0.1
+    end_hold_frames: int = 3
+    max_turn_duration_s: float = 15.0
+    frame_padding_s: float = 1.0
+    min_abs_dpsi_total_deg: float = 15.0
+    # Bend-travel fit: frames from maximum bend to turn end with total bend at
+    # least this (crawl 95th percentile, 51-59 deg).
+    travel_min_total_bend_deg: float = 55.0
+    travel_min_frames: int = 4
+    travel_min_distance_seglen: float = 0.5
+    # Heading curves (D-034): grids on which each turn's cumulative heading
+    # change is sampled. Distance and time curves stop at the turn's end.
+    curve_progress_step: float = 0.05
+    curve_distance_step_seglen: float = 0.25
+    curve_max_distance_seglen: float = 10.0
+
+    def __post_init__(self) -> None:
+        if self.spine_sg_window % 2 == 0 or self.spine_sg_window <= self.spine_sg_order:
+            raise ValueError("spine_sg_window must be odd and larger than spine_sg_order.")
+        for axis in (self.heading_axis, self.model_heading_axis, *self.sensitivity_axes):
+            if axis not in HEADING_AXES:
+                raise ValueError(f"Unknown heading axis '{axis}'. Axes are: {', '.join(HEADING_AXES)}")
+        if self.n_body_segments < 2:
+            raise ValueError("n_body_segments must be at least 2.")
+        if not 0 < self.trail_fraction_of_peak < 1:
+            raise ValueError("trail_fraction_of_peak must be between 0 and 1.")
+        if self.end_speed_mode not in ("relative", "absolute"):
+            raise ValueError("end_speed_mode must be 'relative' or 'absolute'.")
+        if not 0.5 < self.piece_orientation_share <= 1:
+            raise ValueError("piece_orientation_share must be above 0.5 and at most 1.")
+
+
 @dataclass(frozen=True)
 class PipelineParams:
     """The complete parameter set of one run, keyed by stage number."""
