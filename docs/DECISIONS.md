@@ -1660,3 +1660,58 @@ medians (1.70 s); the per-turn value is the output.
   undefined in the real data. This is the "pause case" anticipated in the
   design (§5.1): migration not tied to forward crawling.
 
+
+---
+
+## D-037 — Stage 12 runs as an analysis over chosen recordings, not as a pipeline stage (T3)
+**Date:** 2026-10-21 · **Status:** Accepted · **Phase:** stage 12 / T3
+
+**Context.** Stage 12's end threshold is pooled across the recordings in an
+analysis (D-031), so a stage 12 result depends on which recordings are
+analysed together, like the pooled HMM fit (D-002). As a per-recording
+pipeline stage it would also change the batch default, project completeness,
+the GUI stage list and the figure catalogue. And a plain "run all stages" could
+never complete, because the threshold is undefined for one recording alone.
+
+**Decision.** `core/turn_analysis.py` (console: `tools/turn_analysis.py`):
+- **Inputs.** It reads the current stage 02, 04 and 09 tables of each chosen
+  recording, and refuses recordings with segmentation off or stale stages.
+- **Threshold and runs.** It pools the threshold, then runs stage 12 on each
+  recording. Every table carries `recording_id`, `condition` and
+  `larva_id = <recording>::larva<N>`, so nothing is keyed on track or larva
+  number alone (D-015).
+- **Summary.** Per condition × subset (all, single-sweep, multi-sweep) ×
+  measure, on included turns with a fraction:
+  - n at turn, larva and recording level;
+  - turn-level mean, SD, SE, median and quartiles;
+  - share negative for signed measures;
+  - larva-level mean, SD and SE.
+  The primary measures come first: signed fraction at the cast end on both
+  axes, then at the head-angle peak, then the bend lags.
+- **Contrasts.** Pairs of conditions, larva-level. A pair is **refused, with
+  no numbers**, when either condition has one recording. Otherwise the
+  difference of larva means is given with the pooled between-larva SD, and
+  `within_larva_spread` marks a difference smaller than that SD. No test
+  statistic (D-025).
+- **Loud failure.** Two conditions identical on *every* measure raise an
+  error. A single discrete measure (`n_sweeps`) may coincide legitimately.
+- **Grouping report.** Each grouping variable's values, with recordings,
+  larvae and turns behind each.
+- **Smoothing sensitivity.** The whole analysis, threshold included, is rerun
+  at windows 5 and 11.
+- **Export.** One folder under `<output_root>/turn_analyses/`, holding every
+  table and a manifest. The manifest records the resolved parameters, the
+  pooled and per-recording thresholds, the primary definitions, the bend sign
+  convention, the per-recording diagnostics and the warnings.
+
+**First result (the two recordings as samples of one population; 153 turns,
+18 larvae).** Signed fraction at the cast end on `tail_sp1`: median +0.040 (IQR
+−0.040 to +0.116), 34% negative; larva mean +0.017 ± SD 0.174 (SE 0.041). On
+`tail_sp2`: median −0.019, 57% negative. sp1→sp2 lag: median 0.40 s; distance
+crawled during it, median 0.07 segment lengths. Smoothing windows 5/7/11:
+`tail_sp1` median +0.040/+0.040/+0.054, share negative 0.35/0.34/0.33. Grouped
+by genotype, every contrast is refused.
+
+**Consequences.** Stage 12 results live in the analysis folder, not the
+recording's output tree, and are reproducible from the manifest. GUI access
+(an analysis action beside the Aggregate tab) and figures are T4.

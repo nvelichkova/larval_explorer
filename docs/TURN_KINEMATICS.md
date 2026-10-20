@@ -526,3 +526,11 @@ instants are reported. The sp1→sp2 bend-peak lag, and the distance crawled
 during it, are primary migration outputs. Current numbers are in D-036. In
 short: real larvae move the bend from sp1 to sp2 in 0.3–0.4 s while crawling
 0.04–0.12 segment lengths. The model takes 0.7–2.4 s and 1.9–5.6 segment lengths.
+
+## 13. T3: the analysis across recordings (2026-10-21, D-037)
+
+`core/turn_analysis.py` / `tools/turn_analysis.py` run stage 12 over chosen
+recordings with the pooled threshold. They produce the per-condition summary
+(n at three levels, turn- and larva-level statistics), contrasts that are
+refused for single-recording conditions, the grouping report and smoothing
+sensitivity, all exported with a manifest. The first pooled result is in D-037.
