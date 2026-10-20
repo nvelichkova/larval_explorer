@@ -509,6 +509,11 @@ Decisions D-032 to D-034. In short:
 | model slow_bend, through the pipeline | 56 | +0.25 | +0.276 | +0.37 | 0.02 |
 | model fast_bend, through the pipeline | 71 | −0.20 | −0.115 | −0.05 | 0.92 |
 
-Caveats: the real turns come through stage 09; the model's are seeded from the
-truth file, because stage 09 does not detect the model's slow sweeps (D-034).
-Real sweeps take 0.6–0.85 s; the model's take 2.6–4.4 s.
+Caveats: the real turns come through stage 09. The model's are seeded from the
+truth file, because stage 09 does not detect the model's large turns: their
+anterior angular velocity stays at or below its threshold (D-035). The model's
+cast is not slow (45–55°/s rise, as fast in large turns as in small ones).
+What takes 2.4–4.2 s is |head angle| reaching its maximum as the bend migrates
+to mid-body. So under the current definition the model's "sweep end" is the
+bend reaching sp2, not the end of the cast. Which instant the sweep end should
+be is open (D-035).

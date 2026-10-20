@@ -1552,5 +1552,54 @@ turns excluded.
 not 0.231. Condition contrasts of the magnitude remain untrustworthy (SYNTHETIC.md); the
 share negative is the robust quantity. A like-for-like end-to-end comparison
 needs either a detector that finds slow sweeps or model turns at real sweep
-speeds.
+speeds. *(The slow-sweep reading and this last sentence are corrected in D-035.)*
+
+---
+
+## D-035 — Correction to D-034: the model's casts are not slow; max |head angle| marks the bend reaching mid-body
+**Date:** 2026-10-21 · **Status:** Accepted · **Phase:** stage 12 / T2 · **Corrects** D-034's "model sweeps are slow" and its stage 09 explanation
+
+**Context.** The user measured the model's casts from `slow_bend.csv` with
+stage 12's head-angle definition: median 0.60 s, 63–73°/s. The generator's
+cast is a raised cosine peaking 0.83 s after cast start. D-034 had reported
+2.6–4.4 s at 11–19°/s.
+
+**Findings.**
+- D-034's durations were the truth file's own boundaries
+  (`true_onset_frame` → `true_sweep_end_frame`), as medians over turns with
+  |Δψ_total| ≥ 15°. They were not stage 12's extraction. The CSV's
+  head-angle series agrees with them (onset → max |head angle|: 4.30 s and 2.50 s).
+- The model's turns are bimodal. Small casts (peak |head angle| ≈ 21°,
+  |Δψ_total| < 15°, two-thirds of all turns) peak in 0.7–0.8 s. Large turns
+  (≈ 48°) peak at 4.2 s (slow_bend) and 2.4 s (fast_bend). Over all turns:
+  median 0.9 s, mean 1.80 s. The gap is the subset, not the statistic.
+- **The cast itself is not slow.** Rise rate is 45–55°/s in every subset,
+  and large turns reach 27–30° in their first 1.3 s. Their |head angle| then
+  keeps growing as the bend migrates sp1 → sp2 → sp3. The head angle pivots at
+  sp2, so **its maximum marks the bend reaching mid-body, not the end of the
+  head sweep**. It comes earlier with faster migration (2.4 s at `migK` 1.4,
+  4.2 s at 0.6). "Sweep end = max |head angle|", the brief's definition, shared
+  by the truth file and stage 12, conflates the sweep with migration whenever
+  migration is slow.
+- **Real sweeps are still faster at peak:** rise rate 137–180°/s, peak
+  57–61° at 0.6–0.85 s (stage 12 turns, which are selected by stage 09). D-034
+  compared a mean rate (peak ÷ duration) for real data with a mean rate for the
+  model, so the 4–7× figure was right in kind. On peak rate the ratio is about 3×.
+- **Why stage 09 misses large model turns.** Replaying its criteria on its own
+  saved signals: in large turns the anterior angular velocity peaks at 13–20°/s
+  against a per-track threshold of 18.8°/s (slow_bend L1), while small casts
+  reach 24–50°/s. The cause is not established. Candidates: stage 09's 2.1-s
+  position smoothing, and its world-frame anterior angle, which is reduced
+  wherever the posterior rotates the other way.
+
+**Decision.** Nothing in the detector or the generator changes. The open
+question is the sweep-end definition: whether "end of the head sweep" should be
+the first peak of |head angle| (the cast) or its maximum (bend at mid-body).
+That is the user's call. On real data the two may coincide; on the model they do
+not.
+
+**Consequences.** D-034's sentence "needs either a detector that finds slow
+sweeps or model turns at real sweep speeds" is withdrawn. Synthetic headline
+numbers under the current definition measure the fraction of heading change by
+the time the bend reaches mid-body.
 
