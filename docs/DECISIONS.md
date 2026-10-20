@@ -1715,3 +1715,39 @@ by genotype, every contrast is refused.
 **Consequences.** Stage 12 results live in the analysis folder, not the
 recording's output tree, and are reproducible from the manifest. GUI access
 (an analysis action beside the Aggregate tab) and figures are T4.
+
+---
+
+## D-038 — Bend travel per segment-length crawled is a diagnostic; what real turns are made of
+**Date:** 2026-10-21 · **Status:** Accepted · **Phase:** stage 12 / T3
+
+**Decision.**
+- `bend_travel_per_seglen` and `bend_travel_per_wave` are diagnostics, not
+  primary outputs (user's decision). Real larvae crawl a median of 0.07
+  segment lengths while the bend moves sp1→sp2, so a rate per segment-length
+  crawled has a denominator near zero by biology. The quantity is ill-posed for
+  this animal. It is still summarised, so that its being undefined stays
+  visible; the sp1→sp2 lag is the migration measure.
+- The distance-curve grid is widened to 30 segment lengths (`curve_max_distance_seglen`).
+  Model turns run to ~23, so the old 10 cut off most slow_bend curves.
+
+**What real turns are made of** (pooled, 152–153 turns, `tail_sp1`; model
+truth-seeded). Medians:
+
+| | crawled, whole turn | crawled, cast end → end | crawled at 50% / 90% of heading | time to 50% / 90% | sp3 bend peak | heading reached by the sp3 peak |
+|---|---|---|---|---|---|---|
+| real | 8.3 seglen | 8.1 | 1.0 / 3.75 | 2.1 / 3.2 s | 1.8 s | 0.46 |
+| model slow_bend | 22.8 | 19.9 | > 10 (most beyond the old grid) | 5.7 / 8.4 s | 7.9 s | 0.82 |
+| model fast_bend | 10.7 | 8.7 | 6.75 / 8.5 | 3.8 / 4.7 s | 4.3 s | 0.67 |
+
+- Real larvae do **not** rotate in place. Only the sp1→sp2 migration is in
+  place (0.07 seglen). Half the heading change is reached after about 1
+  segment length of crawling, and about half of it accrues after the bend's
+  peak has passed sp3, during forward crawling. In the model, rotation is
+  mostly complete when the bend reaches sp3. Caveat: sp3 is at arc 0.79, so the
+  bend may still be in the posterior fifth.
+- The magnitude at the cast end is measured through five points, which in
+  the model lowers the signed fraction (true +0.009 → measured −0.022) and
+  roughly doubles the share negative (39% → 79%). The real +0.040 / 34% may
+  therefore understate the true fraction and overstate counter-rotation. That
+  the cast contributes little is robust; the 4% figure is not.

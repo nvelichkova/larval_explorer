@@ -51,9 +51,13 @@ OTHER_MEASURES = (
     S.BEND_LAG_12_S, S.BEND_LAG_12_SEGLEN, S.BEND_LAG_23_S,
     S.FRAC_HEADING_IN_SWEEP, S.model_axis_column(S.FRAC_HEADING_IN_SWEEP),
     S.ABS_DPSI_TOTAL_DEG, S.ABS_PEAK_HEAD_ANGLE_DEG,
-    S.TURN_DURATION_S, S.SWEEP_DURATION_S, S.N_SWEEPS, S.BEND_TRAVEL_PER_SEGLEN,
+    S.TURN_DURATION_S, S.SWEEP_DURATION_S, S.N_SWEEPS,
 )
-SUMMARY_MEASURES = SIGNED_MEASURES + OTHER_MEASURES
+# Diagnostic only (D-038): real larvae crawl almost nothing while the bend
+# migrates, so a rate per segment-length crawled is ill-posed for this animal.
+# It is summarised so that its being undefined stays visible.
+DIAGNOSTIC_MEASURES = (S.BEND_TRAVEL_PER_SEGLEN, S.BEND_TRAVEL_PER_WAVE)
+SUMMARY_MEASURES = SIGNED_MEASURES + OTHER_MEASURES + DIAGNOSTIC_MEASURES
 
 
 @dataclass(frozen=True)
@@ -350,6 +354,7 @@ def export_turn_analysis(folder: Path, analysis: TurnAnalysis) -> Path:
             "fraction": S.FRAC_HEADING_IN_SWEEP_SIGNED, "heading_axis": analysis.params.heading_axis,
             "model_matched_axis": analysis.params.model_heading_axis,
             "cast_end": "peak of the sp1 bend (D-036)", "migration": S.BEND_LAG_12_S,
+            "diagnostic_only": list(DIAGNOSTIC_MEASURES),
             "summary_level_for_comparison": "larva",
         },
         "bend_sign_convention": "walking tail to head; same sign as the head angle; the model walks head to tail (D-032)",

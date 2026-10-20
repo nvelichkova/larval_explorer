@@ -243,7 +243,7 @@ class TurnKinematicsParams:
     # change is sampled. Distance and time curves stop at the turn's end.
     curve_progress_step: float = 0.05
     curve_distance_step_seglen: float = 0.25
-    curve_max_distance_seglen: float = 10.0
+    curve_max_distance_seglen: float = 30.0  # model turns run to ~23 segment lengths
 
     def __post_init__(self) -> None:
         if self.spine_sg_window % 2 == 0 or self.spine_sg_window <= self.spine_sg_order:
