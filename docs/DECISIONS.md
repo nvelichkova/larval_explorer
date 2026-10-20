@@ -1751,3 +1751,45 @@ truth-seeded). Medians:
   roughly doubles the share negative (39% → 79%). The real +0.040 / 34% may
   therefore understate the true fraction and overstate counter-rotation. That
   the cast contributes little is robust; the 4% figure is not.
+
+---
+
+## D-039 — Regenerated truth files; the sp1→sp2 lag fails validation on slow_bend
+**Date:** 2026-10-21 · **Status:** Accepted · **Phase:** stage 12 / T3 · **Supersedes** the truth files and `synthtrack.js` of the D-034 fixture
+
+**Context.** The user regenerated the truth files. They add `t_cast_end_s` (the
+sp1 bend peak, as in D-036), signed and absolute cast-end fractions (ideal, and
+clean 5-point on all axes), `t_sp2_peak_s`, `lag_sp1_sp2_s` and
+`crawled_during_lag_seglen`. `synthtrack.js` also changed. The recordings are
+byte-identical (SHA-256 unchanged; the hashes the user quoted are MD5 sums).
+
+**Decision.** The two truth files and `synthtrack.js` in `tests/data/synthetic/`
+are replaced; `SHA256SUMS.txt` keeps the first delivery's hashes beneath the
+current ones. New tests score stage 12 per turn against the truth.
+
+**Results (truth-seeded, included turns with |Δψ_total| ≥ 15°).**
+- **Cast end:** median error 0.5 frames in both conditions (passes).
+- **Cast-end fraction, `tail_sp1`:** slow_bend ideal +0.013 (30% negative),
+  truth file's 5-point −0.017 (75%), stage 12 −0.039 (82%). fast_bend: ideal
+  −0.369, 5-point −0.453, stage 12 −0.385 (all 100% negative). Scored, not
+  pinned: the 5-point bias of D-034 applies.
+- **sp1→sp2 lag:** fast_bend 0.70 s against truth 0.70 s (passes). slow_bend
+  2.40 s against 1.60 s: **fails**. Median sp2-peak timing is right (−0.05 s),
+  but 38% of turns put the sp2 peak more than 0.5 s off, for two causes:
+  - in slow turns the sp2 bend sits on a plateau about 2 s wide, and argmax on
+    pixel data lands anywhere along it;
+  - the cast sign is taken from the head angle in the first sweep, which in
+    some turns is a small opposite sweep before the main bend.
+  The test is `xfail(strict=True)`, so a fix will be flagged.
+- **Distance crawled during the lag** does not match the truth even where the
+  lag does (fast_bend 1.88 against 1.30 segment lengths), so the distance
+  definitions differ. Not yet validated.
+
+**Consequences.** The lag is the contrast D-036 called trustworthy. It is
+validated on fast_bend only. Real lags are short (0.3–0.4 s) with narrow
+peaks, so the plateau problem may matter less there, but that is unverified.
+Fixing peak location (a plateau-robust estimate, and the cast sign) comes
+before the lag is used in a write-up. Model side, per the user: the model does 0% of its
+rotation after the bend leaves the body (bend set to zero on exit), while real
+larvae do about half of theirs after the sp3 peak. The candidates are path
+following and a persistent post-turn curvature; the curves are the target.

@@ -120,6 +120,46 @@ function turnTruth(frames, fps) {
       ? +(Math.abs(dS)/Math.abs(dT)).toFixed(4) : '';
   }
 
+  /* --- the cast end: peak of the most anterior bend (sp1).
+     The head-angle maximum tracks the bend arriving at the sp2 pivot, not the
+     end of the cast, so it merges the sweep with the migration whenever
+     migration is slow. The anterior bend is local to one articulation and
+     cannot inherit that, and it sits at arc 0.29, which maps to T3/A1 - where
+     the asymmetric output is initiated. */
+  let iCast = 0, bestC = -1;
+  for (let i = 0; i < frames.length; i++) {
+    const sp = frames[i].spine5;
+    const a1 = Math.abs(ang(sp[0], sp[1], sp[2]));
+    if (a1 > bestC) { bestC = a1; iCast = i; }
+  }
+  out.t_cast_end_s = +frames[iCast].t.toFixed(3);
+  out.cast_end_frame_offset = iCast;
+  out.peak_sp1_bend_deg = +(bestC * D).toFixed(2);
+  for (const [name, k] of Object.entries(axes5)) {
+    const p0 = dirOf(frames[0].spine5[T], frames[0].spine5[k]);
+    const pC = dirOf(frames[iCast].spine5[T], frames[iCast].spine5[k]);
+    const pE = dirOf(frames[frames.length-1].spine5[T], frames[frames.length-1].spine5[k]);
+    const dC = wrap(pC-p0), dT = wrap(pE-p0);
+    out['clean5_cast_dpsi_deg_'+name] = +(dC*D).toFixed(2);
+    out['clean5_cast_frac_'+name] = Math.abs(dT*D) >= 15
+      ? +(dC/dT).toFixed(4) : '';                /* SIGNED: the primary form */
+    out['clean5_cast_absfrac_'+name] = Math.abs(dT*D) >= 15
+      ? +(Math.abs(dC)/Math.abs(dT)).toFixed(4) : '';
+  }
+  /* sp1 -> sp2 lag, the migration observable, per turn */
+  let iMid = 0, bestM = -1;
+  for (let i = 0; i < frames.length; i++) {
+    const sp = frames[i].spine5;
+    const a2 = Math.abs(ang(sp[1], sp[2], sp[3]));
+    if (a2 > bestM) { bestM = a2; iMid = i; }
+  }
+  out.t_sp2_peak_s = +frames[iMid].t.toFixed(3);
+  out.lag_sp1_sp2_s = +(frames[iMid].t - frames[iCast].t).toFixed(3);
+  let dMig = 0;
+  for (let i = Math.min(iCast, iMid) + 1; i <= Math.max(iCast, iMid); i++)
+    dMig += Math.hypot(frames[i].cx-frames[i-1].cx, frames[i].cy-frames[i-1].cy);
+  out.crawled_during_lag_seglen = +(dMig/SEGLEN).toFixed(4);
+
   // --- ideal: the model's own 12-point geometry and axis
   const psi12 = (s) => dirOf(s[11], s[3]);
   const p0 = psi12(frames[0].spine12);
@@ -129,6 +169,11 @@ function turnTruth(frames, fps) {
   out.ideal_dpsi_sweep_deg = +(dS*D).toFixed(2);
   out.ideal_dpsi_total_deg = +(dT*D).toFixed(2);
   out.ideal_frac = Math.abs(dT*D) >= 15 ? +(Math.abs(dS)/Math.abs(dT)).toFixed(4) : '';
+  const pC12 = psi12(frames[iCast].spine12);
+  const dC12 = wrap(pC12-p0);
+  out.ideal_cast_dpsi_deg = +(dC12*D).toFixed(2);
+  out.ideal_cast_frac = Math.abs(dT*D) >= 15 ? +(dC12/dT).toFixed(4) : '';
+  out.ideal_cast_absfrac = Math.abs(dT*D) >= 15 ? +(Math.abs(dC12)/Math.abs(dT)).toFixed(4) : '';
 
   // bend profile on the full spine, at maximum total bend
   let iMax = 0, bestB = -1;

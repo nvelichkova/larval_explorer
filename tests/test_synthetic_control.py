@@ -99,3 +99,31 @@ def test_the_sign_at_the_head_angle_peak_is_recovered_on_the_model_axis(seeded):
     # Truth: slow_bend never counter-rotates (0%), fast_bend nearly always (97%).
     assert (slow < 0).mean() < 0.1 and slow.median() > 0
     assert (fast < 0).mean() > 0.85 and fast.median() < 0
+
+
+# The regenerated truth files (D-039) define the cast end (sp1 bend peak) and the
+# sp1 -> sp2 lag the same way stage 12 does, so both can be scored per turn.
+
+@pytest.mark.parametrize("condition", ["slow_bend", "fast_bend"])
+def test_cast_end_matches_the_truth(seeded, condition):
+    turns, truth, fps = seeded[condition]
+    kept = turns[S.INCLUDED].to_numpy()
+    error = (turns[S.T_SWEEP_END_S] - truth.t_cast_end_s).to_numpy()[kept] * fps
+    assert np.median(np.abs(error)) <= 1.0
+
+
+def _lag_error(seeded, condition):
+    turns, truth, _ = seeded[condition]
+    kept = turns[S.INCLUDED].to_numpy()
+    return (turns[S.BEND_LAG_12_S] - truth.lag_sp1_sp2_s).to_numpy()[kept]
+
+
+def test_lag_matches_the_truth_on_fast_bend(seeded):
+    assert np.median(np.abs(_lag_error(seeded, "fast_bend"))) <= 0.25
+
+
+@pytest.mark.xfail(strict=True, reason="D-039: on slow_bend the sp2 bend peak is mislocated in ~38% of turns "
+                   "(broad plateau; cast sign taken from a small first sweep). Remove this mark once fixed.")
+def test_lag_matches_the_truth_on_slow_bend(seeded):
+    error = _lag_error(seeded, "slow_bend")
+    assert np.median(np.abs(error)) <= 0.25 and np.mean(np.abs(error) > 0.5) <= 0.1

@@ -10,5 +10,10 @@ folder; they are fixtures.
 - `*_truth.csv`, `*_meta.json`, `SYNTHETIC.md`, `synthcheck.py`, `synthtrack.js`: as
   received.
 
-Never edit or regenerate these files. `tests/test_synthetic_control.py` runs stage 12 on
+**2026-10-21 (D-039):** the two truth files and `synthtrack.js` were replaced by the
+user's regenerated versions, which add the cast-end fraction (sp1 bend peak) and the
+sp1->sp2 lag. The recordings are byte-identical to the first delivery (SHA-256 above;
+the user's quoted `2bcb9e6d…` / `4c8953a0…` are their MD5 sums).
+
+Never edit or regenerate these files; replace them only on the user's word, with a decision entry. `tests/test_synthetic_control.py` runs stage 12 on
 them; `tools/synthetic_control.py tests/data/synthetic <out>` writes the full report.
