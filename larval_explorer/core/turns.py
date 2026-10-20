@@ -553,12 +553,14 @@ _HEADING_CHANGE = (S.DPSI_SWEEP_DEG, S.DPSI_TOTAL_DEG, S.FRAC_HEADING_IN_SWEEP, 
 # leaves the later ones blank.
 TURN_COLUMNS = (
     S.TRACK_ID, S.LARVA_INDEX, S.TURN_INDEX,
-    S.HEAD_CAST_START_S, S.HEAD_CAST_END_S, S.T_ONSET_S, S.T_SWEEP_END_S, S.T_MAX_BEND_S, S.T_END_S,
+    S.HEAD_CAST_START_S, S.HEAD_CAST_END_S, S.T_ONSET_S, S.T_SWEEP_END_S, S.T_HEAD_ANGLE_PEAK_S, S.T_MAX_BEND_S, S.T_END_S,
     S.INCLUDED, S.EXCLUSION_REASON, S.FRAC_COMPUTED,
     S.HEADING_AXIS, *_HEADING_CHANGE, *(S.model_axis_column(c) for c in _HEADING_CHANGE),
-    S.CAST_PEAK_HEAD_ANGLE_DEG, S.PEAK_HEAD_ANGLE_DEG, S.N_SWEEPS, S.MULTI_SWEEP,
+    S.FRAC_SIGNED_AT_HEAD_ANGLE_PEAK, S.model_axis_column(S.FRAC_SIGNED_AT_HEAD_ANGLE_PEAK),
+    S.T_BEND_1_PEAK_S, S.T_BEND_2_PEAK_S, S.T_BEND_3_PEAK_S, S.BEND_LAG_12_S, S.BEND_LAG_23_S, S.BEND_LAG_12_SEGLEN,
+    S.CAST_PEAK_HEAD_ANGLE_DEG, S.PEAK_HEAD_ANGLE_DEG, S.CAST_END_BEND_1_DEG, S.N_SWEEPS, S.MULTI_SWEEP,
     S.TURN_DURATION_S, S.SWEEP_DURATION_S, S.MAX_TOTAL_BEND_DEG,
-    S.SWEEP_END_PROGRESS, S.SWEEP_END_DISTANCE_SEGLEN, S.TURN_DISTANCE_SEGLEN,
+    S.SWEEP_END_PROGRESS, S.HEAD_ANGLE_PEAK_PROGRESS, S.SWEEP_END_DISTANCE_SEGLEN, S.TURN_DISTANCE_SEGLEN,
     *(S.at_max_column(c) for c in _AT_MAX),
     S.BEND_TRAVEL_PER_SEGLEN, S.BEND_TRAVEL_PER_WAVE, S.BEND_TRAVEL_R2, S.BEND_TRAVEL_N_FRAMES,
     S.BEND_TRAVEL_DISTANCE_SEGLEN,
@@ -624,6 +626,7 @@ def track_turns(track: pd.DataFrame, casts: pd.DataFrame, reference: dict, param
     t = track[S.TIME_S].to_numpy()
     n = len(t)
     head = track[S.HEAD_ANGLE_DEG].to_numpy()
+    bend_1, bend_2, bend_3 = (track[S.bend_column(b)].to_numpy() for b in BOUNDARIES)
     total_bend = track[S.TOTAL_BEND_DEG].to_numpy()
     speed = track[S.TAIL_FORWARD_SPEED_MM_S].to_numpy()
     distance = track[S.POSTERIOR_DISTANCE_MM].to_numpy()
@@ -687,13 +690,24 @@ def track_turns(track: pd.DataFrame, casts: pd.DataFrame, reference: dict, param
             windows.append((j, window))
             continue
         a, b = first[0] + i_on, first[1] + i_on
-        i_sw = a + int(np.argmax(np.abs(head[a:b + 1])))
-        row.update({S.T_SWEEP_END_S: t[i_sw], S.PEAK_HEAD_ANGLE_DEG: head[i_sw], S.SWEEP_DURATION_S: t[i_sw] - t[i_on]})
+        i_ha = a + int(np.argmax(np.abs(head[a:b + 1])))
+        # The cast ends at the peak of the most anterior bend (sp1), signed in the
+        # cast's direction, between onset and the end of the first sweep (D-036).
+        # The |head angle| maximum is kept as a second instant: it marks the bend
+        # reaching mid-body, not the end of the cast (D-035).
+        cast_sign = np.sign(head[i_ha])
+        i_sw = i_on + int(np.argmax(cast_sign * bend_1[i_on:b + 1]))
+        if cast_sign * bend_1[i_sw] <= 0:
+            row[S.EXCLUSION_REASON] = S.EXCLUDE_NO_SWEEP
+            windows.append((j, window))
+            continue
+        row.update({S.T_SWEEP_END_S: t[i_sw], S.T_HEAD_ANGLE_PEAK_S: t[i_ha], S.PEAK_HEAD_ANGLE_DEG: head[i_ha],
+                    S.CAST_END_BEND_1_DEG: bend_1[i_sw], S.SWEEP_DURATION_S: t[i_sw] - t[i_on]})
 
         limit = min(n - 1, i_on + max_frames)
         if j + 1 < len(starts):
             limit = min(limit, starts[j + 1] - 1)
-        i_end = next((i for i in range(i_sw + 1, limit - hold + 2) if ends_ok[i:i + hold].all()), None)
+        i_end = next((i for i in range(max(i_sw, i_ha) + 1, limit - hold + 2) if ends_ok[i:i + hold].all()), None)
         if i_end is None:
             row[S.EXCLUSION_REASON] = S.EXCLUDE_END_NOT_FOUND
             windows.append((j, (max(0, i_on - pad), limit)))
@@ -706,12 +720,27 @@ def track_turns(track: pd.DataFrame, casts: pd.DataFrame, reference: dict, param
             h = headings[axis]
             sweep, total = h[i_sw] - h[i_on], h[i_end] - h[i_on]
             values = (sweep, total, *_fraction(sweep, total, params.min_abs_dpsi_total_deg))
+            at_ha = _fraction(h[i_ha] - h[i_on], total, params.min_abs_dpsi_total_deg)[1]
             axis_rows.append({S.TRACK_ID: track_id, S.TURN_INDEX: j, S.HEADING_AXIS: axis,
-                              S.SPINE_SG_WINDOW: params.spine_sg_window, **dict(zip(_HEADING_CHANGE, values))})
+                              S.SPINE_SG_WINDOW: params.spine_sg_window, **dict(zip(_HEADING_CHANGE, values)),
+                              S.FRAC_SIGNED_AT_HEAD_ANGLE_PEAK: at_ha})
             if axis == params.heading_axis:
                 row.update(dict(zip(_HEADING_CHANGE, values)))
+                row[S.FRAC_SIGNED_AT_HEAD_ANGLE_PEAK] = at_ha
             if axis == params.model_heading_axis:
                 row.update({S.model_axis_column(name): value for name, value in zip(_HEADING_CHANGE, values)})
+                row[S.model_axis_column(S.FRAC_SIGNED_AT_HEAD_ANGLE_PEAK)] = at_ha
+
+        # Bend migration (D-036): when each boundary's bend, signed in the cast's
+        # direction, peaks. The sp1 -> sp2 lag measures migration with no
+        # distance, segment length or fit involved.
+        # sp1's peak is the cast end itself (first sweep only); sp2 and sp3 peak anywhere in the turn.
+        i_b = [i_sw] + [i_on + int(np.argmax(cast_sign * bend[span])) for bend in (bend_2, bend_3)]
+        row.update({
+            S.T_BEND_1_PEAK_S: t[i_b[0]], S.T_BEND_2_PEAK_S: t[i_b[1]], S.T_BEND_3_PEAK_S: t[i_b[2]],
+            S.BEND_LAG_12_S: t[i_b[1]] - t[i_b[0]], S.BEND_LAG_23_S: t[i_b[2]] - t[i_b[1]],
+            S.BEND_LAG_12_SEGLEN: (distance[i_b[1]] - distance[i_b[0]]) / seglen,
+        })
 
         for axis in (params.heading_axis, params.model_heading_axis):
             for curve, x, fraction, into in heading_curves(t, distance, headings[axis], i_on, i_end, seglen, params):
@@ -719,6 +748,7 @@ def track_turns(track: pd.DataFrame, casts: pd.DataFrame, reference: dict, param
                                    S.CURVE: curve, S.CURVE_X: x, S.FRACTION_OF_TOTAL: fraction, S.DPSI_INTO_TURN_DEG: into})
         row.update({
             S.SWEEP_END_PROGRESS: (t[i_sw] - t[i_on]) / (t[i_end] - t[i_on]),
+            S.HEAD_ANGLE_PEAK_PROGRESS: (t[i_ha] - t[i_on]) / (t[i_end] - t[i_on]),
             S.SWEEP_END_DISTANCE_SEGLEN: (distance[i_sw] - distance[i_on]) / seglen,
             S.TURN_DISTANCE_SEGLEN: (distance[i_end] - distance[i_on]) / seglen,
         })

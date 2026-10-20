@@ -517,3 +517,12 @@ What takes 2.4–4.2 s is |head angle| reaching its maximum as the bend migrates
 to mid-body. So under the current definition the model's "sweep end" is the
 bend reaching sp2, not the end of the cast. Which instant the sweep end should
 be is open (D-035).
+
+## 12. Cast end at the sp1 bend peak (2026-10-21, D-036)
+
+The cast now ends at the peak of the most anterior bend (sp1), not at the
+|head angle| maximum, which marks the bend reaching mid-body (D-035). Both
+instants are reported. The sp1→sp2 bend-peak lag, and the distance crawled
+during it, are primary migration outputs. Current numbers are in D-036. In
+short: real larvae move the bend from sp1 to sp2 in 0.3–0.4 s while crawling
+0.04–0.12 segment lengths. The model takes 0.7–2.4 s and 1.9–5.6 segment lengths.

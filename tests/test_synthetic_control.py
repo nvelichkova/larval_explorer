@@ -55,18 +55,44 @@ def seeded():
 
 
 @pytest.mark.parametrize("condition", ["slow_bend", "fast_bend"])
-def test_onset_and_sweep_end_are_found_close_to_the_truth(seeded, condition):
+def test_onset_and_head_angle_peak_are_found_close_to_the_truth(seeded, condition):
+    # The truth file's "sweep end" is the |head angle| maximum (D-035).
     turns, truth, fps = seeded[condition]
     onset_err = turns[S.T_ONSET_S] - truth.true_onset_frame / fps
-    sweep_err = turns[S.T_SWEEP_END_S] - truth.true_sweep_end_frame / fps
-    # In frames: slow sweeps have a broad peak, and the median sweep-end error there is 2 frames.
+    peak_err = turns[S.T_HEAD_ANGLE_PEAK_S] - truth.true_sweep_end_frame / fps
+    # In frames: slow sweeps have a broad peak, and the median error there is 2 frames.
     assert (onset_err * fps).abs().median() <= 2.5
-    assert (sweep_err * fps).abs().median() <= 2.5
+    assert (peak_err * fps).abs().median() <= 2.5
     assert turns[S.INCLUDED].mean() >= 0.6
 
 
-def test_the_sign_at_sweep_end_is_recovered_on_the_model_axis(seeded):
-    column = S.model_axis_column(S.FRAC_HEADING_IN_SWEEP_SIGNED)
+# The user's independent measurement through the pixel data (2026-10-21): median
+# time from onset to the sp1 and sp2 bend peaks.
+BEND_PEAKS_MEASURED = {"slow_bend": (2.60, 4.30), "fast_bend": (1.70, 2.40)}
+
+
+@pytest.mark.parametrize("condition", ["slow_bend", "fast_bend"])
+def test_bend_peaks_reproduce_the_independent_measurement(seeded, condition):
+    turns, _, _ = seeded[condition]
+    kept = turns[turns[S.INCLUDED]]
+    sp1, sp2 = BEND_PEAKS_MEASURED[condition]
+    assert (kept[S.T_BEND_1_PEAK_S] - kept[S.T_ONSET_S]).median() == pytest.approx(sp1, abs=0.3)
+    assert (kept[S.T_BEND_2_PEAK_S] - kept[S.T_ONSET_S]).median() == pytest.approx(sp2, abs=0.3)
+    # The cast ends at the sp1 peak (D-036).
+    assert (kept[S.T_SWEEP_END_S] == kept[S.T_BEND_1_PEAK_S]).all()
+
+
+def test_faster_migration_gives_a_shorter_sp1_to_sp2_lag(seeded):
+    slow = seeded["slow_bend"][0]
+    fast = seeded["fast_bend"][0]
+    slow, fast = slow.loc[slow[S.INCLUDED], S.BEND_LAG_12_S], fast.loc[fast[S.INCLUDED], S.BEND_LAG_12_S]
+    assert slow.median() > fast.median() > 0
+    assert (slow > 0).mean() > 0.9 and (fast > 0).mean() > 0.9
+
+
+def test_the_sign_at_the_head_angle_peak_is_recovered_on_the_model_axis(seeded):
+    # The truth defines its fraction at the |head angle| maximum, so the sign is scored there.
+    column = S.model_axis_column(S.FRAC_SIGNED_AT_HEAD_ANGLE_PEAK)
     slow = seeded["slow_bend"][0]
     fast = seeded["fast_bend"][0]
     slow, fast = slow.loc[slow[S.INCLUDED], column].dropna(), fast.loc[fast[S.INCLUDED], column].dropna()

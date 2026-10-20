@@ -1601,5 +1601,62 @@ not.
 **Consequences.** D-034's sentence "needs either a detector that finds slow
 sweeps or model turns at real sweep speeds" is withdrawn. Synthetic headline
 numbers under the current definition measure the fraction of heading change by
-the time the bend reaches mid-body.
+the time the bend reaches mid-body. *(Sweep-end definition settled in D-036.)*
+
+---
+
+## D-036 — The cast ends at the peak of the sp1 bend; the sp1→sp2 peak lag is a primary migration output
+**Date:** 2026-10-21 · **Status:** Accepted · **Phase:** stage 12 / T2 · **Supersedes** the sweep-end instant of D-027 and D-034
+
+**Context.** The user confirmed D-035 independently. Measured through the
+pixel data, the |head angle| maximum coincides with the sp2 bend peak (median
+4.30 s slow_bend, 2.40 s fast_bend), within 0.2 s on 57% and 75% of turns. It
+is a migration landmark, not the end of the cast.
+
+**Decision (user's).**
+- **Cast end = peak of the sp1 bend**, signed in the cast's direction (the
+  sign of the head angle at its maximum in the first sweep), searched from
+  onset to the end of the first sweep. This is now `t_sweep_end_s`, and every
+  fraction and `sweep_end_progress` is read there. Reasons: a single
+  articulation cannot inherit rotation of a distant reference axis; it rises and
+  falls, so it is a real maximum; and sp1 (arc 0.29, model boundary ≈ 3.2,
+  T3/A1) is where the asymmetric output is initiated (Berni 2015; Zeng 2021,
+  T1–A1 contracting during a cast).
+- **The |head angle| maximum is kept** as `t_head_angle_peak_s`, with
+  `frac_heading_signed_at_head_angle_peak` (both axes) and
+  `head_angle_peak_progress`, so the curves are read at both instants and the
+  choice is documented. Sweep detection (existence, sign, `n_sweeps`) still uses
+  the hysteretic head-angle sweep.
+- **Bend migration** per turn: `t_bend_1/2/3_peak_s` (sp1's is the cast end;
+  sp2 and sp3 peak anywhere in the turn, same sign), `bend_lag_12_s`,
+  `bend_lag_23_s`, and `bend_lag_12_distance_seglen`, the forward distance
+  crawled during the sp1→sp2 lag. The lag needs no distance, segment length or
+  fit, which makes it more robust than `bend_travel_per_seglen`. It is a
+  primary output. The turn end is searched after the later of the two instants.
+
+**Results (medians; model truth-seeded, real through stage 09).**
+
+| | sp1 peak | sp2 peak | sp3 peak | lag sp1→sp2 | crawled during lag | signed, `tail_sp1`, at cast end (share neg.) | at \|head angle\| peak (share neg.) |
+|---|---|---|---|---|---|---|---|
+| model slow_bend | 2.60 s | 4.30 s | 7.85 s | 2.40 s | 5.6 seglen | −0.039 (0.82) | +0.276 (0.02) |
+| model fast_bend | 1.80 s | 2.40 s | 4.30 s | 0.70 s | 1.9 seglen | −0.390 (0.98) | −0.119 (0.90) |
+| real amiGA-amRNAi | 0.60 s | 1.10 s | 2.10 s | 0.40 s | 0.12 seglen | +0.036 (0.34) | +0.096 (0.26) |
+| real w1118 | 0.40 s | 0.70 s | 1.50 s | 0.30 s | 0.04 seglen | +0.047 (0.33) | +0.127 (0.34) |
+
+The sp1 and sp2 peak times reproduce the user's independent measurement
+(2.60/1.70 and 4.30/2.40 s); `tests/test_synthetic_control.py` pins them within
+0.3 s. The per-turn median lag (2.40 s slow) differs from the difference of the
+medians (1.70 s); the per-turn value is the output.
+
+**Consequences.**
+- At the new instant, the model is counter-rotated on the model-matched axis
+  in both conditions (82% and 98% negative), while the real recordings are
+  mixtures (33–34%). The truth file defines its fraction at the |head angle|
+  peak, so the magnitude at the cast end has no truth to score against. Only
+  its timing is validated.
+- In real larvae the bend reaches sp2 within 0.3–0.4 s, while crawling
+  0.04–0.12 segment lengths. In the model it takes 0.7–2.4 s and 1.9–5.6
+  segment lengths. Migration per segment-length crawled is therefore close to
+  undefined in the real data. This is the "pause case" anticipated in the
+  design (§5.1): migration not tied to forward crawling.
 
