@@ -122,8 +122,9 @@ def test_lag_matches_the_truth_on_fast_bend(seeded):
     assert np.median(np.abs(_lag_error(seeded, "fast_bend"))) <= 0.25
 
 
-@pytest.mark.xfail(strict=True, reason="D-039: on slow_bend the sp2 bend peak is mislocated in ~38% of turns "
-                   "(broad plateau; cast sign taken from a small first sweep). Remove this mark once fixed.")
+@pytest.mark.xfail(strict=True, reason="D-040: slow_bend's sp1 and sp2 bend profiles have several humps of "
+                   "near-equal height, so which is 'the peak' is decided by pixel noise (sp1 lands early, sp2 late). "
+                   "No peak estimator recovers it; real profiles are single-humped like fast_bend, where the lag validates.")
 def test_lag_matches_the_truth_on_slow_bend(seeded):
     error = _lag_error(seeded, "slow_bend")
     assert np.median(np.abs(error)) <= 0.25 and np.mean(np.abs(error) > 0.5) <= 0.1

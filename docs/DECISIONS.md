@@ -1793,3 +1793,53 @@ before the lag is used in a write-up. Model side, per the user: the model does 0
 rotation after the bend leaves the body (bend set to zero on exit), while real
 larvae do about half of theirs after the sp3 peak. The candidates are path
 following and a persistent post-turn curvature; the curves are the target.
+
+---
+
+## D-040 — Why the slow_bend lag cannot be recovered, and why the real lag can
+**Date:** 2026-10-21 · **Status:** Accepted · **Phase:** stage 12 / T3 · **Refines** D-039
+
+**Tested and ruled out.**
+- *Smoothing makes a plateau* (the user's hypothesis). Within 5% of its
+  maximum the sp2 bend lasts 0.1–0.2 s at every window (unsmoothed, 3, 5, 7),
+  matching the user's unsmoothed measurement. The 7-frame filter does not
+  flatten the peak.
+- *A better peak estimator.* With the truth's own cast frame and sign, argmax
+  on unsmoothed data or at windows 3–15, and a centroid of the top 20%, all
+  leave about 40% of slow_bend turns with sp1 or sp2 more than 0.5 s off.
+  Heavier smoothing is worse. (A half-maximum crossing measures onset lag, a
+  different quantity, as the user found.)
+- *A hump-ratio flag* (second-highest local maximum ÷ highest). On pixel data,
+  noise wiggles on one hump count as humps, so it flags almost every slow
+  turn and does not separate good lags from bad. Removed.
+- *Cross-correlation of the sp1 and sp2 bend series.* It measures waveform
+  delay: 2.60 s (slow) and 1.50 s (fast) against peak lags of 1.60 and 0.70
+  s. It is a different quantity. On real turns, though, it agrees with the
+  peak lag (medians 0.40 and 0.30 s; within 0.2 s on 63–69% of turns),
+  whereas in the model the two differ by about 1 s: the model's bend changes
+  shape as it travels.
+
+**Cause.** In slow_bend the sp1 and sp2 bend profiles usually have several
+humps within 20% of the maximum, and the noiseless truth picks the highest.
+At 10–13° of pixel noise the winner flips. The errors are directional (sp1
+early, median −1.05 s when wrong; sp2 late), so the lag comes out long (2.45
+against 1.60 s). In fast_bend sp2 is single-humped in 88 of 96 turns, and the lag
+validates (0.70 against 0.70 s).
+
+**Real data.** Real bend profiles are mostly single-humped: sp1 in 84% and 92%
+of turns, sp2 in 74% and 94%. They resemble fast_bend, not slow_bend, and the
+peak and cross-correlation lags agree. The real lag is therefore in the regime
+the control validates.
+
+**Decision.**
+- The sp2 peak is searched only after the cast end, and sp3 only after sp2:
+  the bend migrates posteriorly, and the whole-turn search could pick an
+  earlier, unrelated bend of the same sign. Real lag unchanged (median 0.40 s).
+- The slow_bend lag test stays a strict expected failure, with this
+  diagnosis as its reason. It describes a model condition that the peak lag
+  cannot resolve at this resolution; it is not a stage 12 defect.
+- The distance during the lag will use a matched definition (forward tail,
+  segment length = 5-point polyline length during straight crawling ÷ 11) once
+  the user regenerates the truth with that column. The polyline is 84% of the
+  true arc length, so the current real figure of 0.04–0.12 segment lengths is
+  about 19% high in true-body units.

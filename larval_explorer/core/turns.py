@@ -734,8 +734,12 @@ def track_turns(track: pd.DataFrame, casts: pd.DataFrame, reference: dict, param
         # Bend migration (D-036): when each boundary's bend, signed in the cast's
         # direction, peaks. The sp1 -> sp2 lag measures migration with no
         # distance, segment length or fit involved.
-        # sp1's peak is the cast end itself (first sweep only); sp2 and sp3 peak anywhere in the turn.
-        i_b = [i_sw] + [i_on + int(np.argmax(cast_sign * bend[span])) for bend in (bend_2, bend_3)]
+        # sp1's peak is the cast end itself (first sweep only). The bend migrates
+        # posteriorly, so sp2 peaks after it and sp3 after sp2 (D-040); searching the
+        # whole turn could pick an earlier, unrelated bend of the same sign.
+        i_b2 = i_sw + int(np.argmax(cast_sign * bend_2[i_sw:i_end + 1]))
+        i_b3 = i_b2 + int(np.argmax(cast_sign * bend_3[i_b2:i_end + 1]))
+        i_b = [i_sw, i_b2, i_b3]
         row.update({
             S.T_BEND_1_PEAK_S: t[i_b[0]], S.T_BEND_2_PEAK_S: t[i_b[1]], S.T_BEND_3_PEAK_S: t[i_b[2]],
             S.BEND_LAG_12_S: t[i_b[1]] - t[i_b[0]], S.BEND_LAG_23_S: t[i_b[2]] - t[i_b[1]],
