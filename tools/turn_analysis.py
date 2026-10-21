@@ -24,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from larval_explorer.core import pipeline as PL  # noqa: E402
 from larval_explorer.core import schema as S  # noqa: E402
 from larval_explorer.core import turn_analysis as TA  # noqa: E402
+from larval_explorer.plots import turns as turn_plots  # noqa: E402
 
 
 def main() -> None:
@@ -32,6 +33,9 @@ def main() -> None:
     parser.add_argument("recordings", nargs="+", type=Path)
     parser.add_argument("--condition", nargs="*", default=[], help="RECORDING_ID=LABEL")
     parser.add_argument("--windows", nargs="*", type=int, default=[5, 11])
+    parser.add_argument("--reference", nargs="*", default=[],
+                        help="LABEL=curve_summary.csv: model curves to overlay, e.g. from tools/synthetic_control.py")
+    parser.add_argument("--formats", nargs="*", default=["pdf", "svg", "png"])
     args = parser.parse_args()
 
     inputs = []
@@ -42,7 +46,9 @@ def main() -> None:
     conditions = dict(item.split("=", 1) for item in args.condition) or None
     analysis = TA.turn_analysis(inputs, conditions, sensitivity_windows=args.windows)
     folder = TA.new_turn_analysis_folder(args.output_root)
-    manifest = TA.export_turn_analysis(folder, analysis)
+    references = {label: pd.read_csv(path) for label, path in (item.split("=", 1) for item in args.reference)}
+    figures = turn_plots.turn_figures(analysis, references)
+    manifest = TA.export_turn_analysis(folder, analysis, figures, turn_plots.FIGURE_TITLES, args.formats)
 
     summary = analysis.tables["summary"]
     headline = summary[(summary[S.SUBSET] == TA.SUBSET_ALL) & summary[S.MEASURE].isin(TA.SUMMARY_MEASURES[:4] + TA.OTHER_MEASURES[:3])]

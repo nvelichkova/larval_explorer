@@ -332,8 +332,16 @@ def turn_analysis(
                         tuple(warnings), groups)
 
 
-def export_turn_analysis(folder: Path, analysis: TurnAnalysis) -> Path:
-    """Write every table as CSV, plus a manifest with the resolved parameters. Returns the manifest path."""
+def export_turn_analysis(folder: Path, analysis: TurnAnalysis, figures: dict | None = None,
+                         figure_titles: dict[str, str] | None = None, formats: Sequence[str] = ("pdf", "svg", "png"),
+                         dpi: int = 300) -> Path:
+    """Write every table as CSV, any figures in each format, and a manifest. Returns the manifest path.
+
+    Figures are built by the caller (``plots/turns.py``) and drawn here on Agg
+    canvases, as ``aggregate.export_comparison`` does, so this works off the GUI thread.
+    """
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+
     folder = Path(folder)
     folder.mkdir(parents=True, exist_ok=True)
     files = []
@@ -341,6 +349,15 @@ def export_turn_analysis(folder: Path, analysis: TurnAnalysis) -> Path:
         path = folder / f"{name}.csv"
         table.to_csv(path, index=False)
         files.append(path.name)
+    figure_entries = {}
+    for name, figure in (figures or {}).items():
+        FigureCanvasAgg(figure)
+        written = []
+        for extension in formats:
+            path = folder / f"{name}.{extension}"
+            figure.savefig(path, dpi=dpi)
+            written.append(path.name)
+        figure_entries[name] = {"title": (figure_titles or {}).get(name, name), "files": written}
     manifest = {
         "created_at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
         "recordings": list(analysis.recording_ids),
@@ -361,6 +378,7 @@ def export_turn_analysis(folder: Path, analysis: TurnAnalysis) -> Path:
         "diagnostics": analysis.diagnostics,
         "warnings": list(analysis.warnings),
         "files": files,
+        "figures": figure_entries,
         "environment": M.environment(),
     }
     path = folder / TURN_ANALYSIS_MANIFEST
