@@ -39,6 +39,7 @@ from larval_explorer.core.project import (
 )
 from larval_explorer.plots import catalog
 from larval_explorer.ui.aggregate_tab import AggregateTab
+from larval_explorer.ui.turns_tab import TurnsTab
 from larval_explorer.ui.batch_tab import BatchTab
 from larval_explorer.ui.tabs import ExplorerTab, IngestTab, ProjectTab, SegmentationTab, StageTab
 from larval_explorer.workers.tasks import FunctionWorker, PipelineWorker
@@ -169,6 +170,8 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.batch_tab, "Batch")
         self.aggregate_tab = AggregateTab(self)
         self.tabs.addTab(self.aggregate_tab, "Aggregate")
+        self.turns_tab = TurnsTab(self)
+        self.tabs.addTab(self.turns_tab, "Turns 12")
         self.tabs.currentChanged.connect(lambda _index: self._refresh_current_tab())
 
         splitter = QSplitter(Qt.Horizontal)

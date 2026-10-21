@@ -2,7 +2,7 @@
 
     python tools/turn_analysis.py <output_root> <recording.csv> [...] [--condition RID=LABEL ...] [--windows 5 11]
 
-Each recording is brought up to date through stage 09 with default parameters.
+Stages 02, 04 and 09 of each recording are brought up to date with default parameters.
 The end-of-turn threshold is then pooled across all of them and stage 12 runs
 on each. The per-condition summary, refused or reported contrasts, grouping
 report, curves and smoothing sensitivity are written to
@@ -41,7 +41,7 @@ def main() -> None:
     inputs = []
     for source in args.recordings:
         pipeline = PL.RecordingPipeline(source.stem, source, args.output_root)
-        pipeline.run(["09"])
+        pipeline.run(list(TA.INPUT_STAGES))   # 04 is not a dependency of 09; run it too
         inputs.append(TA.load_turn_inputs(pipeline))
     conditions = dict(item.split("=", 1) for item in args.condition) or None
     analysis = TA.turn_analysis(inputs, conditions, sensitivity_windows=args.windows)

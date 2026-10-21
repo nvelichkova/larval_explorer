@@ -317,3 +317,24 @@ def test_removing_every_recording_leaves_an_empty_project_not_a_crash(app, windo
 
     tab.add_paths([window.project.folder.parent / "w1118_n1_att1.csv"])
     assert tab.table.rowCount() == 1                   # and recordings can be added again
+
+
+def test_turns_tab_brings_its_input_stages_up_to_date_and_runs(app, window):
+    tab = window.turns_tab
+    window.tabs.setCurrentWidget(tab)
+    idle(app, window)
+    assert tab.ticked() == ["w1118_n1_att1"]
+    set_min_segment(window, 20.0)
+    window.run_targets(["09"])                  # stage 04 is not run by this: the tab must run it itself
+    idle(app, window)
+    assert window.statuses["04"] != PL.STATUS_OK
+    window.tabs.setCurrentWidget(tab)
+    tab.run_button.click()
+    idle(app, window)
+    assert not window.problems, window.problems
+    assert window.pipeline.status("04") == PL.STATUS_OK
+    if tab.analysis is not None:                 # the short synthetic recording may have no usable turn
+        assert tab.export_button.isEnabled()
+        assert tab.figures.selector.count() == 6
+    else:
+        assert tab.status_label.text()           # and if so, the tab says why

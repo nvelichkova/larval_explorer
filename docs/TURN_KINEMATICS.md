@@ -534,3 +534,10 @@ recordings with the pooled threshold. They produce the per-condition summary
 (n at three levels, turn- and larva-level statistics), contrasts that are
 refused for single-recording conditions, the grouping report and smoothing
 sensitivity, all exported with a manifest. The first pooled result is in D-037.
+
+## 14. T4: figures and the Turns tab (2026-10-21, D-042)
+
+`plots/turns.py` holds six figures: heading curves on progress and distance
+(with model references), signed fraction at both instants, migration lag,
+smoothing sensitivity and censoring. The **Turns 12** tab runs the analysis
+over ticked recordings and exports tables, figures and manifest.

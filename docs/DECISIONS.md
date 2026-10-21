@@ -1880,3 +1880,44 @@ the bend exits (D-039) and a bend that changes shape as it travels (D-040).
 *Correction (same day):* `synthtrack.js` was also updated (17,143 bytes,
 SHA-256 `0707089a…`) and is replaced in the fixture. The statement above that it
 was unchanged is wrong. Nothing in the test suite runs the generator.
+
+---
+
+## D-042 — T4: stage 12 figures and the Turns tab
+**Date:** 2026-10-21 · **Status:** Accepted · **Phase:** stage 12 / T4
+
+**Decision.**
+- **`plots/turns.py`**: six factories over a `TurnAnalysis`, returning
+  Figures, never writing:
+  - heading curves on turn progress and on distance crawled, with both heading
+    axes, quartile bands, the median cast end and the |head angle| peak marked,
+    and optional model reference curves;
+  - the signed fraction at both instants, model-matched axis, with turns, box,
+    larva means and share negative;
+  - the sp1→sp2 lag and the distance crawled during it;
+  - smoothing sensitivity;
+  - censoring by filter, with the filters that drop larger turns marked.
+- **Conventions.** Conditions are told apart by position and label (D-025).
+  The two heading axes have fixed colours (`tail_sp1` ink, `tail_sp2` first
+  categorical); model references are grey, one dash style each. Signed-fraction
+  axes span the 1st to 99th percentile and count the points off scale: a ratio
+  from a turn just above the 15° minimum can reach −7 and would flatten
+  everything else. Share-negative axes run 0–1, and median axes span at least
+  ±0.15, so that a small change looks small.
+- **Export.** `export_turn_analysis` draws figures on Agg canvases in each
+  format, beside the tables and manifest. `tools/turn_analysis.py --reference
+  LABEL=curve_summary.csv` overlays model curves, e.g. from
+  `tools/synthetic_control.py`.
+- **GUI.** A **Turns 12** tab: tick recordings, optionally group, run in a
+  worker, view the primary measures and the six figures, export. It brings
+  stages 02, 04 and 09 up to date first with the parameters shown in the stage
+  tabs, as the Aggregate tab's pooled fit does. Stage 12's own parameters are
+  defaults; they are not editable in the GUI and are recorded in the export
+  manifest.
+
+**Bug found.** Stage 04 is not a dependency of stage 09, so "run through 09"
+leaves it unrun, and `tools/turn_analysis.py` relied on an earlier run having
+made it current. Both now run stages 02, 04 and 09 explicitly. A GUI test runs
+through 09 only and checks that the tab makes 04 current. An offscreen run on
+the two real recordings reproduces the console headline (152 turns, 18 larvae,
+`tail_sp1` median +0.040, 34% negative).
