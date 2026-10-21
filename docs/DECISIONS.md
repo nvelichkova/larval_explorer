@@ -1876,3 +1876,7 @@ percentiles (86° and 65°, against 50–59°) are contaminated: stage 09 misses
 model's large turns, so 84–88% of model frames fall inside its "crawls". Only
 the medians compare. This is the third model-side item, after rotation after
 the bend exits (D-039) and a bend that changes shape as it travels (D-040).
+
+*Correction (same day):* `synthtrack.js` was also updated (17,143 bytes,
+SHA-256 `0707089a…`) and is replaced in the fixture. The statement above that it
+was unchanged is wrong. Nothing in the test suite runs the generator.

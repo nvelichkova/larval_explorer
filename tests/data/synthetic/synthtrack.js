@@ -90,7 +90,24 @@ function headAngle5(s) {            // s = [head, ...interior..., tail]
   return wrap(dirOf(s[mid], s[0]) - dirOf(s[s.length-1], s[mid]));
 }
 
-function turnTruth(frames, fps) {
+/* Forward-projected tail distance, the tracking side's definition: the tail's
+   motion along the posterior axis, with backward motion not counted, so that
+   jitter on a stationary animal does not accumulate. */
+function tailForward(frames, i0, i1) {
+  let d = 0;
+  for (let i = i0 + 1; i <= i1; i++) {
+    const a = frames[i-1].spine5, b = frames[i].spine5;
+    const T = a.length - 1;
+    const ax = a[2][0]-a[T][0], ay = a[2][1]-a[T][1];      /* tail -> sp2 */
+    const L = Math.hypot(ax, ay) || 1;
+    const vx = b[T][0]-a[T][0], vy = b[T][1]-a[T][1];
+    const fwd = (vx*ax + vy*ay) / L;
+    if (fwd > 0) d += fwd;
+  }
+  return d;
+}
+
+function turnTruth(frames, fps, segRef) {
   // frames: [{t, spine12, spine5, cx, cy}] through one turn, in order
   if (frames.length < 5) return null;
 
@@ -159,6 +176,15 @@ function turnTruth(frames, fps) {
   for (let i = Math.min(iCast, iMid) + 1; i <= Math.max(iCast, iMid); i++)
     dMig += Math.hypot(frames[i].cx-frames[i-1].cx, frames[i].cy-frames[i-1].cy);
   out.crawled_during_lag_seglen = +(dMig/SEGLEN).toFixed(4);
+  /* the matched definition: forward-projected tail distance over a segment
+     length taken from the 5-point polyline measured while crawling straight.
+     A 5-chord polyline is a constant ~84% of the true arc, so dividing by the
+     model's true 4.0/11 instead inflates nothing here but would make the two
+     sides disagree by ~19%. */
+  const dFwd = tailForward(frames, Math.min(iCast, iMid), Math.max(iCast, iMid));
+  out.crawled_during_lag_mm_tailfwd = +dFwd.toFixed(4);
+  out.segment_length_ref_mm = +segRef.toFixed(5);
+  out.crawled_during_lag_seglen_matched = +(dFwd/segRef).toFixed(4);
 
   // --- ideal: the model's own 12-point geometry and axis
   const psi12 = (s) => dirOf(s[11], s[3]);
@@ -252,11 +278,26 @@ function emit(name, params, larvae, duration, outDir) {
       frameRows.push(row);
     });
 
+    /* segment-length reference: the 5-point polyline length while NOT turning,
+       which is what a tracker measures on a straight animal */
+    const turnSpans = analyse(r.samples).map((t) => [t.frames[0].t, t.frames[t.frames.length-1].t]);
+    const inTurn = (tt) => turnSpans.some((sp) => tt >= sp[0] - 1 && tt <= sp[1] + 1);
+    const plen = [];
+    built.forEach((f) => {
+      if (inTurn(f.t)) return;
+      let L = 0;
+      for (let k = 1; k < f.spine5.length; k++)
+        L += Math.hypot(f.spine5[k][0]-f.spine5[k-1][0], f.spine5[k][1]-f.spine5[k-1][1]);
+      plen.push(L);
+    });
+    plen.sort((x, y) => x - y);
+    const segRef = (plen.length ? plen[Math.floor(plen.length/2)] : 4.0) / SEG;
+
     // ground truth from the model's own turn boundaries, not from a detector
     const byT = new Map(built.map((f) => [f.t.toFixed(2), f]));
     analyse(r.samples).forEach((turn, ti) => {
       const fr = turn.frames.map((x) => byT.get(x.t.toFixed(2))).filter(Boolean);
-      const tr = turnTruth(fr, FPS);
+      const tr = turnTruth(fr, FPS, segRef);
       if (!tr) return;
       truthRows.push(Object.assign(
         { condition: name, larva: name + '_L' + L, turn_index: ti,
