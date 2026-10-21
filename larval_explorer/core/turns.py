@@ -264,6 +264,7 @@ def track_kinematics(
     out[S.TAIL_FORWARD_SPEED_MM_S] = forward * frame_rate_fps
     out[S.POSTERIOR_DISTANCE_MM] = np.cumsum(np.maximum(forward, 0.0))
     out[S.TAIL_PATH_LENGTH_MM] = np.cumsum(path)
+    out[S.SPINE_POLYLINE_MM] = np.linalg.norm(np.diff(points, axis=1), axis=2).sum(axis=1)
     out[S.SPINE_FLIP] = detect_flips(raw)
     for flag in (S.IS_WELL_ORIENTED, S.IS_COILED, S.INTERPOLATED):
         if flag in track.columns:
@@ -465,10 +466,14 @@ def crawl_total_bends(kinematics: pd.DataFrame, events: pd.DataFrame, orientatio
 
 
 def larva_reference(kinematics, events, orientation, body_length) -> pd.DataFrame:
-    """Per larva: mean body length, median crawl forward speed, median stride (mm).
+    """Per larva: reference body length, median crawl forward speed, median stride (mm).
 
-    Body length is the frame-weighted mean of the larva's track segments'
-    stage 04 means. A stride is the forward tail distance over one stage 09
+    The reference body length is the median 5-point polyline length over the
+    larva's clean, correctly labelled crawl frames (D-041). It is the same
+    reference the synthetic truth uses, so distances in segment lengths are
+    directly comparable. The polyline is about 84% of the true arc length, a
+    fixed factor. Stage 04's mean (all frames, raw points) is kept beside it as
+    ``body_length_stage04_mm``. A stride is the forward tail distance over one stage 09
     crawl (spine-length minimum to minimum), from crawls whose frames are all
     reference frames.
     """
@@ -491,9 +496,12 @@ def larva_reference(kinematics, events, orientation, body_length) -> pd.DataFram
         mine = larva == index
         tracks = kinematics.loc[mine, S.TRACK_ID].value_counts()
         speeds = np.maximum(kinematics.loc[mine & reference, S.TAIL_FORWARD_SPEED_MM_S].to_numpy(), 0)
+        stage04 = float(np.average(body.loc[tracks.index], weights=tracks.to_numpy()))
+        polyline = kinematics.loc[mine & reference, S.SPINE_POLYLINE_MM].to_numpy()
         rows.append({
             S.LARVA_INDEX: index,
-            S.BODY_LENGTH_MM: float(np.average(body.loc[tracks.index], weights=tracks.to_numpy())),
+            S.BODY_LENGTH_MM: float(np.median(polyline)) if len(polyline) else stage04,
+            S.BODY_LENGTH_STAGE04_MM: stage04,
             S.LARVA_CRAWL_SPEED_MM_S: float(np.median(speeds)) if len(speeds) else np.nan,
             S.STRIDE_MM: float(np.median(strides[index])) if strides.get(index) else np.nan,
             S.N_STRIDES: len(strides.get(index, [])),

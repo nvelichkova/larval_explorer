@@ -1,4 +1,15 @@
-# Current fixture (truth files and synthtrack.js replaced 2026-10-21, D-039; recordings unchanged)
+# Current fixture (truth files replaced again 2026-10-21, D-041; recordings and synthtrack.js unchanged since D-039)
+954f1e9d9d9146753f89eb410b012e0407606938ec3f60e646800895a5223c6f *fast_bend.csv
+ffc355c633cdd3f365059a4852890df3a84c3565aa34fd54b79244d999a1b1c4 *fast_bend_truth.csv
+9282c02736dcd3d477afd05d897f4e10697133956834d4862a0e3b9981dbea0b *slow_bend.csv
+51632213611b6d369a608a4b42bf99d4ad6ad146cb07bcecfc0f8c4d1a4cb294 *slow_bend_truth.csv
+3a240cbab25e29cc1112be8b30e7ace683f5984c50da30632af0d7f8da758da9 *fast_bend_meta.json
+d07892fefdc447eb3be20d47de964b90a01ba009942ce6ae2a244503f48789b2 *slow_bend_meta.json
+4dbe3f26ed0e0cff9848a4b9e4c3ea706a5d7a698a5d21eda5bf9cd259640592 *synthcheck.py
+bb79c16ea9ddd267c296b5b165ba43c5a997af97f42f8ee1f6d8a7e7492be5a8 *synthtrack.js
+0c6326b29e36cad2c76d6d6e56e8e16560193cdec0e4715f558606f2bd934c09 *SYNTHETIC.md
+
+# After D-039 (2026-10-21)
 954f1e9d9d9146753f89eb410b012e0407606938ec3f60e646800895a5223c6f *fast_bend.csv
 2f31ad2c43a3115d45b53a04a56a4c66d519dedc3254dc112fda3b06aa6e560d *fast_bend_truth.csv
 9282c02736dcd3d477afd05d897f4e10697133956834d4862a0e3b9981dbea0b *slow_bend.csv

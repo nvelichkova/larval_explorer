@@ -1843,3 +1843,36 @@ the control validates.
   the user regenerates the truth with that column. The polyline is 84% of the
   true arc length, so the current real figure of 0.04–0.12 segment lengths is
   about 19% high in true-body units.
+
+---
+
+## D-041 — Matched distance reference; truth files replaced again; the model's crawl-baseline bend
+**Date:** 2026-10-21 · **Status:** Accepted · **Phase:** stage 12 / T3 · **Supersedes** the truth files of D-039 and the body-length reference of D-027
+
+**Fixture.** The user regenerated the truth files with
+`crawled_during_lag_mm_tailfwd`, `segment_length_ref_mm` and
+`crawled_during_lag_seglen_matched`: forward tail distance over the
+straight-crawl 5-point polyline length ÷ 11. The recordings and
+`synthtrack.js` are unchanged (SHA-256). `SHA256SUMS.txt` keeps every
+delivery's hashes.
+
+**Decision.** Stage 12's body-length reference is now the median 5-point
+polyline length over each larva's clean, correctly labelled crawl frames,
+the same reference the truth uses. Stage 04's mean (raw points, all frames) is
+kept as `body_length_stage04_mm`. The polyline is about 84% of the true arc
+length, a fixed factor (constant within 0.6% between crawling and turning, per
+the user), so distances in segment lengths are in polyline units on both sides.
+
+**Validation.** Segment length 0.3023 / 0.3033 mm against the truth's 0.3046 /
+0.3058. Distance during the lag on fast_bend: 1.92 against 1.95 segment
+lengths. A test pins it within 10%. slow_bend disagrees only because its lag
+does (D-040).
+
+**Crawl-baseline bend, model through stage 12** (clean frames inside stage 09
+crawls, median over tracks). Total bend median 15.7° (slow_bend) and 12.0°
+(fast_bend), against 23–27° in the real recordings. Pixel noise is in both,
+so the model crawls with about 10° less bend than real larvae. The model's 95th
+percentiles (86° and 65°, against 50–59°) are contaminated: stage 09 misses the
+model's large turns, so 84–88% of model frames fall inside its "crawls". Only
+the medians compare. This is the third model-side item, after rotation after
+the bend exits (D-039) and a bend that changes shape as it travels (D-040).

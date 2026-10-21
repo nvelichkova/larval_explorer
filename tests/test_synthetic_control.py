@@ -128,3 +128,12 @@ def test_lag_matches_the_truth_on_fast_bend(seeded):
 def test_lag_matches_the_truth_on_slow_bend(seeded):
     error = _lag_error(seeded, "slow_bend")
     assert np.median(np.abs(error)) <= 0.25 and np.mean(np.abs(error) > 0.5) <= 0.1
+
+
+def test_distance_crawled_during_the_lag_matches_the_truth_on_fast_bend(seeded):
+    # Matched definition (D-041): forward tail distance over the straight-crawl polyline length / 11.
+    turns, truth, _ = seeded["fast_bend"]
+    kept = turns[S.INCLUDED].to_numpy()
+    ours = turns[S.BEND_LAG_12_SEGLEN].to_numpy()[kept]
+    theirs = truth.crawled_during_lag_seglen_matched.to_numpy()[kept]
+    assert np.median(ours) == pytest.approx(np.median(theirs), rel=0.1)
